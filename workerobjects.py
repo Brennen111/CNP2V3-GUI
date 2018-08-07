@@ -8,7 +8,6 @@ import pywt, pyqtgraph
 import Queue
 import numba
 
-
 class PSDWorker(QtCore.QObject):
     # finished = QtCore.pyqtSignal(numpy.float64, numpy.float64)
     finished = QtCore.pyqtSignal()
@@ -23,9 +22,9 @@ class PSDWorker(QtCore.QObject):
         # self.ADCData = numpy.zeros(dictOfConstants['FRAMELENGTH']/4)
         self.parentWindow = parentWindow
         self.dictOfConstants = dictOfConstants
-        self.needsScaling = True
+        self.needsScaling = False
 
-    @numba.autojit
+    @numba.jit
     def numba_scale(self, array, bits=12):
         for i in xrange(len(array)):
             if array[i] >= 2**(bits-1):
@@ -127,10 +126,10 @@ class GetDataFromFPGAWorker(QtCore.QObject):
         if self.FPGAInstance is not None:
             self.FPGAType = self.FPGAInstance.type
             self.validColumns = self.FPGAInstance.validColumns
-            self.processRawDataThreadOptions = {'Master': self.parentWindow.processRawDataMasterThread, 'Slave': self.parentWindow.processRawDataSlaveThread}
-            self.processRawDataThread = self.processRawDataThreadOptions[self.FPGAType]
-            self.processRawDataWorkerInstanceOptions = {'Master': self.parentWindow.processRawDataMasterWorkerInstance, 'Slave': self.parentWindow.processRawDataSlaveWorkerInstance}
-            self.processRawDataWorkerInstance = self.processRawDataWorkerInstanceOptions[self.FPGAType]
+            self.processRawDataThreadOptions = {'Master': [self.parentWindow.processRawDataADC0Thread, self.parentWindow.processRawDataADC1Thread], 'Slave': [self.parentWindow.processRawDataADC2Thread, self.parentWindow.processRawDataADC3Thread, self.parentWindow.processRawDataADC4Thread]}
+            self.processRawDataThreadArray = self.processRawDataThreadOptions[self.FPGAType]
+            self.processRawDataADCWorkerInstanceOptions = {'Master': [self.parentWindow.processRawDataADC0WorkerInstance, self.parentWindow.processRawDataADC1WorkerInstance], 'Slave': [self.parentWindow.processRawDataADC2WorkerInstance, self.parentWindow.processRawDataADC3WorkerInstance, self.parentWindow.processRawDataADC4WorkerInstance]}
+            self.processRawDataADCWorkerInstanceArray = self.processRawDataADCWorkerInstanceOptions[self.FPGAType]
         self.dictOfConstants = dictOfConstants
 
     def getDataFromFPGA(self):
@@ -159,13 +158,14 @@ class GetDataFromFPGAWorker(QtCore.QObject):
                     self.parentWindow.writeToLogFileWorkerInstance.rawData.put(rawData)
                     # self.parentWindow.writeToLogFileThread.start()
             self.dataReady.emit()
-            if (self.parentWindow.columnSelect in self.validColumns):
-                if not self.processRawDataThread.isRunning():
-                    self.processRawDataWorkerInstance.rawData = rawData
-                    self.processRawDataThread.start()
-                # if (False == window.processRawDataThread.isRunning()):
-                    # window.processRawDataWorkerInstance.rawData = rawData
-                    # window.processRawDataThread.start()
+
+            for i in xrange(len(self.processRawDataThreadArray)):
+                if not self.processRawDataThreadArray[i].isRunning():
+                    self.processRawDataADCWorkerInstanceArray[i].rawData = rawData
+                    self.processRawDataThreadArray[i].start()
+                else:
+                    pass
+
             self.updateWireOuts()
             self.stop = time.clock()
             # if ('Slave' == self.FPGAType):
@@ -183,39 +183,65 @@ class GetDataFromFPGAWorker(QtCore.QObject):
             self.parentWindow.FPGASlaveRAMMemoryUsage = RAMMemoryUsage
         return
 
-
 class ProcessRawDataWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal()
     # dataReady = QtCore.pyqtSignal(numpy.ndarray)
-    dataReady = QtCore.pyqtSignal()
+    dataReady = QtCore.pyqtSignal(int)
     startPSDThread = QtCore.pyqtSignal()
     #Signals for the progress bar
     progress = QtCore.pyqtSignal(int, str)
 
-    def __init__(self, parentWindow, dictOfConstants, FPGAInstance):
+    def __init__(self, parentWindow, dictOfConstants, validColumn):
         super(ProcessRawDataWorker, self).__init__()
         self.dictOfConstants = dictOfConstants
+        self.skipPoints = 0
         self.createFilter(100e3)
         self.parentWindow = parentWindow
-        self.FPGAInstance = FPGAInstance
-        if self.FPGAInstance is not None:
-            self.FPGAType = self.FPGAInstance.type
-            self.validColumns = self.FPGAInstance.validColumns
-        else:
-            self.FPGAType = 'Generic'
-            self.validColumns = [0, 1, 2, 3, 4]
+        self.validColumn = validColumn
         # self.rawData = bytearray(self.dictOfConstants['FRAMELENGTH'])
         self.rawDataUnpacked = 0
         self.compressedData = False
+        self.numbaTotal = 0
+        self.numbaCount = 0
+        self.unpackTotal = 0
+        self.unpackCount = 0
+        self.filterTotal = 0
+        self.filterCount = 0
+        self.printTotal = 0
+        self.printCount = 0
+        self.processTimeTotal = 0
+        self.processTimeCount = 0
+        self.time01Total = 0
+        self.time12Total = 0
+        self.time23Total = 0
+        self.time34Total = 0
+        self.time45Total = 0
+        self.time56Total = 0
+        self.time67Total = 0
+        self.time78Total = 0
+        self.time89Total = 0
+        self.time910Total = 0
+        self.time1011Total = 0
+        self.time01Count = 0
+        self.time12Count = 0
+        self.time23Count = 0
+        self.time34Count = 0
+        self.time45Count = 0
+        self.time56Count = 0
+        self.time67Count = 0
+        self.time78Count = 0
+        self.time89Count = 0
+        self.time910Count = 0
+        self.time1011Count = 0
 
-    @numba.autojit
+    @numba.jit(parallel=True, fastmath=True)
     def numba_scale(self, array, bits=12):
         for i in xrange(len(array)):
             if array[i] >= 2**(bits-1):
                 array[i] -= 2**bits
             array[i] /= 2**(bits-1)
 
-    @numba.autojit
+    @numba.jit
     def numba_garrote(self, array, threshold):
         for i in xrange(len(array)):
             if numpy.abs(array[i]) < threshold:
@@ -225,53 +251,76 @@ class ProcessRawDataWorker(QtCore.QObject):
 
     def processRawData(self):
         """Processes the raw data. The raw data is a 32 bit number that contains {8'h00, 12'hADC1Data, 12'hADC0DATA}. This method unpacks the data and then subsamples it and corrects for the boosting and anti-aliasing filter gain and DC offset."""
-        self.start = time.clock()
+        #self.start = time.clock()
         # self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
         # ADCData = {0: numpy.bitwise_and(self.rawDataUnpacked, 0xfff),\
                 # 1: (numpy.bitwise_and(self.rawDataUnpacked, 0xfff000))>>12,\
                 # 3: numpy.bitwise_and(self.rawDataUnpacked, 0xfff)}
         # Switched from dictionary to if else implementation because of timing issues while displaying data
+        time0 = time.clock()
         if self.compressedData == False:
-            ADCData = self.unpackData()
+            #preUnpackData = time.clock()
+            ADCData = self.unpackData().astype(numpy.float32)
+            #postUnpackData = time.clock()
+            #self.unpackTotal += postUnpackData-preUnpackData
+            #self.unpackCount += 1
+            #if (0 == self.validColumn):
+                #print "Debug master unpack average: time = ", self.unpackTotal/self.unpackCount
+
         else:
-            ADCData = numpy.frombuffer(self.rawData, dtype='int16')
+            ADCData = numpy.frombuffer(self.rawData, dtype='int16').astype(numpy.float32)
+        time1 = time.clock()
+        self.numba_scale(ADCData, self.dictOfConstants['ADCBITS'])
+
         if (self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked()):
-            # ADCData2 = copy.deepcopy(ADCData)
-            ADCData2 = ADCData.astype(numpy.float32)
             # ADCData2[ADCData2 >= 2**(self.dictOfConstants['ADCBITS']-1)] -= 2**(self.dictOfConstants['ADCBITS'])
             # ADCData2 /= 2**(self.dictOfConstants['ADCBITS']-1)
-            self.numba_scale(ADCData2, self.dictOfConstants['ADCBITS'])
-            ADCData2 = scipy.signal.lfilter(self.b, self.a, ADCData2)
+
+            #preNumba = time.clock()
+            time2 = time.clock()
+            #postNumba = time.clock()
+            ADCData = scipy.signal.lfilter(self.b, self.a, ADCData)
+            time3 = time.clock()
+            #postFilter = time.clock()
+            #self.filterTotal += postFilter-postNumba
+            #self.filterCount += 1
+            #self.numbaTotal += postNumba-preNumba
+            #self.numbaCount += 1
+
+            #if (0 == self.validColumn):
+                #print "Debug master numba_scale average: time = ", self.numbaTotal/self.numbaCount
+                #print "Debug master filter average: time = ", self.filterTotal/self.filterCount
+
             #ADCData2[:-1] += numpy.diff(ADCData2)/(2*numpy.pi*2.5e6/self.dictOfConstants['ADCSAMPLINGRATE'])
+
             # if (self.parentWindow.ui.checkBox_enableWaveletDenoising.isChecked()):
             #     self.motherWavelet = str(self.parentWindow.ui.lineEdit_motherWavelet.text())
-            #     maxLength = int(2**(numpy.floor(numpy.log2(len(ADCData2)))))
-            #     ADCData2 = ADCData2[:maxLength]
-            #     waveletCoefficients = pywt.swt(ADCData2, self.motherWavelet, level=7)# level=int(numpy.floor(numpy.log2(len(ADCData2)))))
+            #     maxLength = int(2**(numpy.floor(numpy.log2(len(ADCData)))))
+            #     ADCData = ADCData2[:maxLength]
+            #     waveletCoefficients = pywt.swt(ADCData, self.motherWavelet, level=7)# level=int(numpy.floor(numpy.log2(len(ADCData)))))
             #     waveletCoefficients = map(list, waveletCoefficients)
             #     for i in range(len(waveletCoefficients)):
             #         detail = waveletCoefficients[i][1]
             #         sigma = numpy.median(numpy.abs(detail))/0.6745
             #         threshold = sigma*numpy.sqrt(2*numpy.log10(len(detail)))/numpy.log10(7 - i + 1)
             #         self.numba_garrote(waveletCoefficients[i][1], threshold)
-            #     ADCData2 = pywt.iswt(waveletCoefficients, self.motherWavelet)
+            #     ADCData = pywt.iswt(waveletCoefficients, self.motherWavelet)
             # totalNoise = numpy.std(ADCData2[len(ADCData2)/2:])
             # print totalNoise/self.parentWindow.RDCFB/self.dictOfConstants['AAFILTERGAIN']
-            # tags = ADCData2 < -5*totalNoise
+            # tags = ADCData < -5*totalNoise
             # print totalNoise/self.parentWindow.RDCFB, numpy.sum(numpy.bitwise_and(numpy.bitwise_and(tags[:-3], tags[1:-2]), numpy.bitwise_and(tags[2:-1], tags[3:])))
 
-            # Skip first few points of filtered data to avoid edge effects due to filtering
-            self.skipPoints = int(numpy.ceil(self.dictOfConstants['ADCSAMPLINGRATE']/self.livePreviewFilterBandwidth))
-            # self.skipPoints = 4
-            ADCData = ADCData2[self.skipPoints:]
-            self.parentWindow.PSDWorkerInstance.needsScaling = False
-            dataToDisplay = (ADCData2[self.skipPoints::self.dictOfConstants['SUBSAMPLINGFACTOR']]).astype('float32')
+            ADCData = ADCData[self.skipPoints:]
+            time4 = time.clock()
+            dataToDisplay = ADCData[::self.dictOfConstants['SUBSAMPLINGFACTOR']]
+            time5 = time.clock()
+
             if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
-                self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData2[self.skipPoints::self.skipPoints/4]/self.parentWindow.RDCFB/self.dictOfConstants['AAFILTERGAIN'] - self.parentWindow.IDCOffset
+                self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[::self.skipPoints/4]/self.parentWindow.RDCFB/self.dictOfConstants['AAFILTERGAIN'] - self.parentWindow.IDCOffset
                 self.parentWindow.analyzeDataWorkerInstance.effectiveSamplingRate = self.dictOfConstants['ADCSAMPLINGRATE']/self.skipPoints*4
+            time6 = time.clock()
+
         else:
-            ADCData = ADCData.astype('float32')
-            self.numba_scale(ADCData, self.dictOfConstants['ADCBITS'])
             #ADCData[:-1] += numpy.diff(ADCData)/(2*numpy.pi*2.5e6/self.dictOfConstants['ADCSAMPLINGRATE'])
             # if (self.parentWindow.ui.checkBox_enableWaveletDenoising.isChecked()):
             #     self.motherWavelet = str(self.parentWindow.ui.lineEdit_motherWavelet.text())
@@ -293,41 +342,92 @@ class ProcessRawDataWorker(QtCore.QObject):
             #     print "ISWT complete"
             #     if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
             #         self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.RDCFB/self.dictOfConstants['AAFILTERGAIN'] - self.parentWindow.IDCOffset
-            dataToDisplay = (ADCData[0::self.dictOfConstants['SUBSAMPLINGFACTOR']]).astype('float32')
+            dataToDisplay = ADCData[::self.dictOfConstants['SUBSAMPLINGFACTOR']]
             # dataToDisplay[dataToDisplay >= 2**(self.dictOfConstants['ADCBITS']-1)] -= 2**(self.dictOfConstants['ADCBITS'])
             # dataToDisplay /= 2**(self.dictOfConstants['ADCBITS']-1)
             # self.numba_scale(dataToDisplay, self.dictOfConstants['ADCBITS'])
-            # self.parentWindow.PSDWorkerInstance.needsScaling = True
-            self.parentWindow.PSDWorkerInstance.needsScaling = False
+
+        time7 = time.clock()
         dataToDisplay *= 1.0/self.parentWindow.RDCFB/self.dictOfConstants['AAFILTERGAIN'] #Prefixes (like nano or pico) are handled automatically by PyQtGraph
+        time8 = time.clock()
         self.parentWindow.IDCRelative = numpy.mean(dataToDisplay) - self.parentWindow.IDCOffset
+        time9 = time.clock()
         dataToDisplay -= self.parentWindow.IDCOffset
+        time10 = time.clock()
         self.parentWindow.updateIDCLabels()
+        time11 = time.clock()
         self.progress.emit(1, 'Finished calculating data to display')
+
         if (hasattr(self.parentWindow.ui, 'action_enableLivePreview') and self.parentWindow.ui.action_enableLivePreview.isChecked() == False):
             pass
         else:
-            self.parentWindow.dataToDisplay = dataToDisplay
-        if not (self.parentWindow.PSDThread.isRunning()):
-            # self.parentWindow.PSDWorkerInstance.ADCData = ADCData.astype(numpy.float32) #ADCData is sent as float32
+            if (self.parentWindow.columnSelect == self.validColumn):
+                self.parentWindow.dataToDisplay = dataToDisplay
+            self.parentWindow.adcList[self.validColumn].yDataToDisplay = dataToDisplay
+            self.parentWindow.adcList[self.validColumn].xDataToDisplay = numpy.linspace(0, len(dataToDisplay) * self.dictOfConstants['SUBSAMPLINGFACTOR'] * 1.0 / self.dictOfConstants['ADCSAMPLINGRATE'], len(dataToDisplay))
+
+        if (not self.parentWindow.PSDThread.isRunning() and (self.parentWindow.columnSelect == self.validColumn)):
             self.parentWindow.PSDWorkerInstance.ADCData = ADCData #ADCData is sent as float32
             self.parentWindow.PSDThread.start()
             self.progress.emit(1, 'Calculating histogram')
+
+        if (-1 == self.validColumn and self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked()):
+            self.time01Total += time1 - time0
+            self.time12Total += time2 - time1
+            self.time23Total += time3 - time2
+            self.time34Total += time4 - time3
+            self.time45Total += time5 - time4
+            self.time56Total += time6 - time5
+            self.time67Total += time7 - time6
+            self.time78Total += time8 - time7
+            self.time89Total += time9 - time8
+            self.time910Total += time10 - time9
+            self.time1011Total += time11 - time10
+            self.time01Count += 1
+            self.time12Count += 1
+            self.time23Count += 1
+            self.time34Count += 1
+            self.time45Count += 1
+            self.time56Count += 1
+            self.time67Count += 1
+            self.time78Count += 1
+            self.time89Count += 1
+            self.time910Count += 1
+            self.time1011Count += 1
+            print "Debug 0 time0-1 average ", self.time01Total/self.time01Count
+            print "Debug 0 time1-2 average ", self.time12Total/self.time12Count
+            print "Debug 0 time2-3 average ", self.time23Total/self.time23Count
+            print "Debug 0 time3-4 average ", self.time34Total/self.time34Count
+            print "Debug 0 time4-5 average ", self.time45Total/self.time45Count
+            print "Debug 0 time5-6 average ", self.time56Total/self.time56Count
+            print "Debug 0 time6-7 average ", self.time67Total/self.time67Count
+            print "Debug 0 time7-8 average ", self.time78Total/self.time78Count
+            print "Debug 0 time8-9 average ", self.time89Total/self.time89Count
+            print "Debug 0 time9-10 average ", self.time910Total/self.time910Count
+            print "Debug 0 time10-11 average ", self.time1011Total/self.time1011Count
+
         self.stop = time.clock()
+        #if (self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked()):
+            #if (0 == self.validColumn):
+                #self.processTimeTotal += self.stop-self.start
+                #self.processTimeCount += 1
+                #print "Debug master process average: time = ", self.processTimeTotal/self.processTimeCount
         # print "Processing the data took", self.stop-self.start, "s"
-        self.dataReady.emit()
+        self.dataReady.emit(self.validColumn)
         self.finished.emit()
 
     def createFilter(self, livePreviewFilterBandwidth):
-        """livePreviewFilterBandwidth is used to construct an angular frequency such that Fs/2 = 1. Filter is only approximately correct when
+        """livePreviewFilterBandwidth is displayLivePreview used to construct an angular frequency such that Fs/2 = 1. Filter is only approximately correct when
         filtering frequency is < Fs/4"""
         self.livePreviewFilterBandwidth = livePreviewFilterBandwidth
+        # Skip first few points of filtered data to avoid edge effects due to filtering
+        self.skipPoints = int(numpy.ceil(self.dictOfConstants['ADCSAMPLINGRATE']/self.livePreviewFilterBandwidth))
         self.b, self.a = scipy.signal.bessel(4, self.livePreviewFilterBandwidth/self.dictOfConstants['ADCSAMPLINGRATE']*2, 'low')
 
     def compressData(self):
         return self.unpackData().astype(numpy.int16)
 
-    @numba.autojit
+    @numba.jit
     def numba_bitwise_and(self, array, mask, shift, resulttype='uint32'):
         """Numba implementation of AND function with masking and shifting ability"""
         result = numpy.empty_like(array, dtype=resulttype)
@@ -337,108 +437,48 @@ class ProcessRawDataWorker(QtCore.QObject):
 
     def unpackData(self):
         """Returns unpacked ADCData for the selected column"""
-        if ('Master' == self.FPGAType):
-            self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
-            self.progress.emit(1, 'Unpacking data')
-            if (0 == self.parentWindow.columnSelect):
-                ADCData = numpy.empty_like(self.rawDataUnpacked, dtype='uint32')
-                # ADCData = numpy.bitwise_and(self.rawDataUnpacked, 0xfff)
-                ADCData = self.numba_bitwise_and(self.rawDataUnpacked, numpy.uint32(0xfff), 0)
-            elif (1 == self.parentWindow.columnSelect):
-                ADCData = numpy.empty_like(self.rawDataUnpacked, dtype='uint32')
-                # ADCData = numpy.bitwise_and(self.rawDataUnpacked, 0xfff000) >> 12
-                ADCData = self.numba_bitwise_and(self.rawDataUnpacked, numpy.uint32(0xfff000), 12)
-            self.progress.emit(1, 'Processing data for plotting')
-            return ADCData
-        if ('Slave' == self.FPGAType):
-            self.rawData64Bit = numpy.frombuffer(self.rawData, dtype='uint64')
-            self.progress.emit(1, 'Unpacking data')
-            if (2 == self.parentWindow.columnSelect):
-                # ADCDataCompressed = numpy.bitwise_and(self.rawData64Bit[0::2], 0xfffffffff)
-                ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[0::2], numpy.uint64(0xfffffffff), 0, 'uint64')
-                ADCData = numpy.empty((3*numpy.size(ADCDataCompressed),), dtype='uint32')
-                # ADCData[0::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff)
-                # ADCData[1::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000) >> 12
-                # ADCData[2::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000000) >> 24
-                ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
-                ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
-                ADCData[2::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000000), 24)
-            elif (3 == self.parentWindow.columnSelect):
-                # ADCDataCompressed = numpy.bitwise_and(self.rawData64Bit[0::2], 0xfffffff000000000) >> 36
-                # ADCDataCompressedMSB = numpy.bitwise_and(self.rawData64Bit[1::2], 0xff)
-                ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[0::2], numpy.uint64(0xfffffff000000000), 36, 'uint64')
-                ADCDataCompressedMSB = self.numba_bitwise_and(self.rawData64Bit[1::2], numpy.uint64(0xff), 0, 'uint64')
-                ADCData = numpy.empty((3*numpy.size(ADCDataCompressed),), dtype='uint32')
-                # ADCData[0::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff)
-                # ADCData[1::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000) >> 12
-                # ADCData[2::3] = (numpy.bitwise_and(ADCDataCompressed, 0xf000000) >> 24) + ADCDataCompressedMSB*16
-                ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
-                ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
-                ADCData[2::3] = (self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xf000000), 24)) + ADCDataCompressedMSB*16
-            elif (4 == self.parentWindow.columnSelect):
-                # ADCDataCompressed = numpy.bitwise_and(self.rawData64Bit[1::2], 0x00000fffffffff00) >> 8
-                ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[1::2], numpy.uint64(0x00000fffffffff00), 8, 'uint64')
-                ADCData = numpy.empty((3*numpy.size(ADCDataCompressed),), dtype='uint32')
-                # ADCData[0::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff)
-                # ADCData[1::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000) >> 12
-                # ADCData[2::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000000) >> 24
-                ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
-                ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
-                ADCData[2::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000000), 24)
-            self.progress.emit(1, 'Processing data for plotting')
-            return ADCData
-        elif ('Generic' == self.FPGAType):
-            if (self.parentWindow.columnSelect in [0, 1]):
-                self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
-                self.progress.emit(1, 'Unpacking data')
-                if (0 == self.parentWindow.columnSelect):
-                    ADCData = numpy.empty_like(self.rawDataUnpacked, dtype='uint32')
-                    # ADCData = numpy.bitwise_and(self.rawDataUnpacked, 0xfff)
-                    ADCData = self.numba_bitwise_and(self.rawDataUnpacked, numpy.uint32(0xfff), 0)
-                elif (1 == self.parentWindow.columnSelect):
-                    ADCData = numpy.empty_like(self.rawDataUnpacked, dtype='uint32')
-                    # ADCData = numpy.bitwise_and(self.rawDataUnpacked, 0xfff000) >> 12
-                    ADCData = self.numba_bitwise_and(self.rawDataUnpacked, numpy.uint32(0xfff000), 12)
-                self.progress.emit(1, 'Processing data for plotting')
-                return ADCData
-            elif (self.parentWindow.columnSelect in [2, 3, 4]):
-                self.rawData64Bit = numpy.frombuffer(self.rawData, dtype='uint64')
-                self.progress.emit(1, 'Unpacking data')
-                if (2 == self.parentWindow.columnSelect):
-                    # ADCDataCompressed = numpy.bitwise_and(self.rawData64Bit[0::2], 0xfffffffff)
-                    ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[0::2], numpy.uint64(0xfffffffff), 0, 'uint64')
-                    ADCData = numpy.empty((3*numpy.size(ADCDataCompressed),), dtype='uint32')
-                    # ADCData[0::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff)
-                    # ADCData[1::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000) >> 12
-                    # ADCData[2::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000000) >> 24
-                    ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
-                    ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
-                    ADCData[2::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000000), 24)
-                elif (3 == self.parentWindow.columnSelect):
-                    # ADCDataCompressed = numpy.bitwise_and(self.rawData64Bit[0::2], 0xfffffff000000000) >> 36
-                    # ADCDataCompressedMSB = numpy.bitwise_and(self.rawData64Bit[1::2], 0xff)
-                    ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[0::2], numpy.uint64(0xfffffff000000000), 36, 'uint64')
-                    ADCDataCompressedMSB = self.numba_bitwise_and(self.rawData64Bit[1::2], numpy.uint64(0xff), 0, 'uint64')
-                    ADCData = numpy.empty((3*numpy.size(ADCDataCompressed),), dtype='uint32')
-                    # ADCData[0::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff)
-                    # ADCData[1::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000) >> 12
-                    # ADCData[2::3] = (numpy.bitwise_and(ADCDataCompressed, 0xf000000) >> 24) + ADCDataCompressedMSB*16
-                    ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
-                    ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
-                    ADCData[2::3] = (self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xf000000), 24)) + ADCDataCompressedMSB*16
-                elif (4 == self.parentWindow.columnSelect):
-                    # ADCDataCompressed = numpy.bitwise_and(self.rawData64Bit[1::2], 0x00000fffffffff00) >> 8
-                    ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[1::2], numpy.uint64(0x00000fffffffff00), 8, 'uint64')
-                    ADCData = numpy.empty((3*numpy.size(ADCDataCompressed),), dtype='uint32')
-                    # ADCData[0::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff)
-                    # ADCData[1::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000) >> 12
-                    # ADCData[2::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000000) >> 24
-                    ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
-                    ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
-                    ADCData[2::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000000), 24)
-                self.progress.emit(1, 'Processing data for plotting')
-                return ADCData
+        self.progress.emit(1, 'Unpacking data')
 
+        if (0 == self.validColumn):
+            self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
+            #ADCData = numpy.empty_like(self.rawDataUnpacked, dtype='uint32')
+            ADCData = self.numba_bitwise_and(self.rawDataUnpacked, numpy.uint32(0xfff), 0)
+
+        elif (1 == self.validColumn):
+            self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
+            #ADCData = numpy.empty_like(self.rawDataUnpacked, dtype='uint32')
+            ADCData = self.numba_bitwise_and(self.rawDataUnpacked, numpy.uint32(0xfff000), 12)
+
+        elif (2 == self.validColumn):
+            self.rawData64Bit = numpy.frombuffer(self.rawData, dtype='uint64')
+            ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[0::2], numpy.uint64(0xfffffffff), 0, 'uint64')
+            ADCData = numpy.empty((3 * numpy.size(ADCDataCompressed),), dtype='uint32')
+            ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
+            ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
+            ADCData[2::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000000), 24)
+
+        elif (3 == self.validColumn):
+            self.rawData64Bit = numpy.frombuffer(self.rawData, dtype='uint64')
+            ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[0::2], numpy.uint64(0xfffffff000000000), 36, 'uint64')
+            ADCDataCompressedMSB = self.numba_bitwise_and(self.rawData64Bit[1::2], numpy.uint64(0xff), 0, 'uint64')
+            ADCData = numpy.empty((3 * numpy.size(ADCDataCompressed),), dtype='uint32')
+            ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
+            ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
+            ADCData[2::3] = (self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xf000000), 24)) + (ADCDataCompressedMSB * 16)
+
+        elif (4 == self.validColumn):
+            self.rawData64Bit = numpy.frombuffer(self.rawData, dtype='uint64')
+            ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[1::2], numpy.uint64(0x00000fffffffff00), 8, 'uint64')
+            ADCData = numpy.empty((3 * numpy.size(ADCDataCompressed),), dtype='uint32')
+            ADCData[0::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff), 0)
+            ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
+            ADCData[2::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000000), 24)
+
+        else:
+            pass
+
+        self.progress.emit(1, 'Processing data for plotting')
+        return ADCData
 
 class WriteToLogFileWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal()

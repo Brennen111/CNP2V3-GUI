@@ -24,7 +24,7 @@ SUBSAMPLINGFACTOR = Constants(10)
 REFRESHRATE = Constants(10)
 AAFILTERGAIN = Constants((51+620)/620*1.8*.51)
 # ADCSAMPLINGRATE = 156250000/4 # in samples per second
-ADCSAMPLINGRATE = Constants(40000000)
+ADCSAMPLINGRATE = Constants(4000000)
 FRAMEDURATION = Constants(1000/REFRESHRATE.getValue())
 # FRAMELENGTH = (((ADCSAMPLINGRATE*FRAMEDURATION/1000)*4)/4000000 + 1)*4000000 # Multiplied by 4 because of the specific FPGA data packing implementation
 FRAMELENGTH = Constants((((ADCSAMPLINGRATE.getValue()*FRAMEDURATION.getValue()/1000)*4)/4000000 + 0)*4000000)
@@ -74,13 +74,13 @@ class PlotWindow(QtGui.QMainWindow):
         if (None == self.f):
             print "Please pick a file to open first"
             return False
-        if (index in [0, 1]):
+        if (index in self.FPGAMasterInstance.validColumns):
             self.rawDataUnpacked = numpy.fromfile(self.f, dtype='uint32')
             if (0 == index):
                 self.ADCData = numpy.bitwise_and(self.rawDataUnpacked, 0xfff)
             elif (1 == index):
                 self.ADCData = numpy.bitwise_and(self.rawDataUnpacked, 0xfff000) >> 12
-        elif (index in [2, 3, 4]):
+        elif (index in self.FPGASlaveInstance.validColumns):
             self.rawDataUnpacked = numpy.fromfile(self.f, dtype='uint64')
             if (2 == index):
                 ADCDataCompressed = numpy.bitwise_and(self.rawData64Bit[0::2], 0xfffffffff)
@@ -117,7 +117,7 @@ class PlotWindow(QtGui.QMainWindow):
         self.ui.graphicsView_time.setLabel(axis='bottom', text='Time (s)')
         self.ui.graphicsView_time.setLabel(axis='left', text='I (nA)')
         self.ui.graphicsView_time.disableAutoRange()
-            
+
     def action_options_triggered(self):
         self.optionsWindow0 = optionsWindow(dictOfConstants)
         self.optionsWindow0.show()

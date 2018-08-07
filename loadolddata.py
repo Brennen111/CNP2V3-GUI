@@ -324,7 +324,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         else:
             pass
 
-    def displayData(self):
+    def displayData(self, column):
         """This method plots self.dataToDisplay from the worker thread that loads data from the file and processes it. The data being displayed is already a subsampled version of the full data. PyQtGraph then displays the data in the GUI."""
         self.start = time.clock()
         if (True):
@@ -548,7 +548,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             self.ui.graphicsView_frequencyFit_plot = self.ui.graphicsView_frequency.plot(numpy.linspace(100, 10e6, 100), numpy.ones(100), pen='k', width=4)
             if (self.dataInMemory == 1):
                 self.PSDFit = self.PSDWorkerInstance.createFit(self.f, self.PSD, 5e6)
-                self.displayData()
+                self.displayData(self.columnSelect)
         else:
             self.ui.graphicsView_frequency.removeItem(self.ui.graphicsView_frequencyFit_plot)
 
@@ -634,7 +634,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.ui.lineEdit_currentEvent.setText(str(self.currentEvent))
         # Update event viewer tab
         if (3 == self.ui.tabWidget_plot.currentIndex()):
-            self.displayData()
+            self.displayData(self.columnSelect)
 
     def dwellTime_sigPointsClicked(self, item, points):
         """Looks up the point that was clicked in the dwell time histogram and opens it up in the event viewer tab"""
@@ -646,7 +646,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         """Changes the type of histogram showed - current blockage vs dwell time or current blockage vs count"""
         self.histogramModeSelect = index
         if (2 == self.ui.tabWidget_plot.currentIndex()):
-            self.displayData()
+            self.displayData(self.columnSelect)
 
     def comboBox_thresholdUnitsSelect_activated(self, index):
         self.thresholdType = index
