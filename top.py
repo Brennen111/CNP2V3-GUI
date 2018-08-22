@@ -25,7 +25,16 @@ if __name__ == "__main__":
     # 	sys.exit()
     window = MainWindow()
     window.setWindowFlags(QtCore.Qt.WindowMinimizeButtonHint | QtCore.Qt.WindowMaximizeButtonHint | QtCore.Qt.WindowCloseButtonHint)
-    window.show()
-    window.createThreads()
-    sip.setdestroyonexit(False) #Added to remove program crash on close bug
+
+    window.show() # Show all widgets
+    width = window.ui.centralwidget.width()
+    window.ui.verticalWidget_rowPlotPlots.hide() # Hide side plots widget
+    window.ui.verticalWidget_rowPlotData.hide()  # Hide side data widget
+    app.sendPostedEvents() # There is a delay before the widget size updates in the data structures. This adds a delay for the Qt framework to update all data structures
+    window.ui.centralwidget.layout().setSizeConstraint(window.ui.centralwidget.layout().SetMinimumSize) # Updates the sizeHint() of the central widget to the new minimum size
+    window.ui.centralwidget.adjustSize() # Resize the central widget to its hint (0,0). This is not necessary from what I can see
+    window.adjustSize() # Tells the mainWindow widget to resize to its hint (0,0)
+    window.setFixedWidth(window.width()) # Fixes the width so the gui cannot be expanded horizonatally in its startup state.
+
+    sip.setdestroyonexit(False) # Added to remove program crash on close bug
     sys.exit(app.exec_())
