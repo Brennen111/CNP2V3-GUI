@@ -1,4 +1,6 @@
-﻿# -*- coding: utf-8 -*-
+﻿# TODO: Hard-coded 5 for adc loops.
+
+# -*- coding: utf-8 -*-
 
 from PyQt4 import QtCore, QtGui
 from mainwindow import MainWindow

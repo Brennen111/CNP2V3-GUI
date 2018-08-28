@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 import os
 from PyQt4 import QtCore, QtGui
+import numpy
+import time
+# import struct
+import json
+import pyqtgraph, pyqtgraph.exporters
+
+import globalConstants
+import channelComponents
 from FPGA import FPGA
 from cnp2_gui import Ui_MainWindow
 from optionswindow import OptionsWindow
 from compressdata import CompressData
-import numpy
-import time
-import struct
-import json
-import pyqtgraph, pyqtgraph.exporters
 from loadolddata import LoadOldDataWindow
 import workerobjects
 
@@ -17,103 +20,65 @@ import workerobjects
 pyqtgraph.setConfigOption('background', 'w') #Set background to white
 pyqtgraph.setConfigOption('foreground', 'k') #Set foreground to black
 
-masterSerial = '1817000M4C'
-slaveSerial = '1817000LYB'
-
-ADCBITS = 12
-SUBSAMPLINGFACTOR = 10
-REFRESHRATE = 10 # in frames per second
-AAFILTERGAIN = (51+620)/620.0*1.8*.51
-ADCSAMPLINGRATE = 4000000
-FRAMEDURATION = 1000/REFRESHRATE
-FRAMELENGTH_MASTER = int((((ADCSAMPLINGRATE*FRAMEDURATION/1000)*4)/4000000. + 0)*4000000) # Multiplied by 4 because of the specific FPGA data packing implementation
-FRAMELENGTH_SLAVE = (int((ADCSAMPLINGRATE*FRAMEDURATION/1000)*4*4.0/3)/4000000 + 1)*4000000 #Slave data is packed with 3/4 efficiency
-# BLOCKLENGTH = 1024
-BLOCKLENGTH = 256 # While transferring data from the FPGA, the transaction is broken up into blocks of this length (in bytes)
-MBCOMMONMODE = 1.65 # Nominal common mode voltage for the motherboard is 1.65 V
-PRESETMODE = 1
-SQUAREWAVEAMPLITUDE = 0.9
-IVSTARTVOLTAGE = -0.5
-IVSTOPVOLTAGE = 0.5
-IVVOLTAGESTEP = 100
-IVTIMESTEP = 500
-IVNUMBEROFCYCLES = 0
-
-CMDQUEUEWIRE   = 0
-CMDUPDATEWIRE  = 1
-CMDTRIGGERWIRE = 2
-
-dictOfConstants = {'ADCBITS':ADCBITS, 'SUBSAMPLINGFACTOR': SUBSAMPLINGFACTOR, 'REFRESHRATE': REFRESHRATE, 'AAFILTERGAIN': AAFILTERGAIN, 'ADCSAMPLINGRATE': ADCSAMPLINGRATE, 'FRAMEDURATION': FRAMEDURATION, 'FRAMELENGTH_MASTER': FRAMELENGTH_MASTER, 'FRAMELENGTH_SLAVE': FRAMELENGTH_SLAVE, 'BLOCKLENGTH': BLOCKLENGTH, 'MBCOMMONMODE': MBCOMMONMODE, 'SQUAREWAVEAMPLITUDE': SQUAREWAVEAMPLITUDE, 'PRESETMODE': PRESETMODE, 'IVSTARTVOLTAGE': IVSTARTVOLTAGE, 'IVSTOPVOLTAGE': IVSTOPVOLTAGE, 'IVVOLTAGESTEP': IVVOLTAGESTEP, 'IVTIMESTEP': IVTIMESTEP, 'IVNUMBEROFCYCLES': IVNUMBEROFCYCLES, 'CMDQUEUEWIRE': CMDQUEUEWIRE, 'CMDUPDATEWIRE': CMDUPDATEWIRE, 'CMDTRIGGERWIRE': CMDTRIGGERWIRE}
-
-class AMPLIFIER:
-    gainIndex = None
-    biasEnable = None
-    connectElectrode = None
-    enableSWCapClock = None
-    triangleWave = None
-    resetIntegrator = None
-    connectISRCEXT = None
-
-    def __init__(self):
-        self.gainIndex = 0
-        self.biasEnable = 0
-        self.connectElectrode = 0
-        self.enableSWCapClock = 0
-        self.enableTriangleWave = 0
-        self.resetIntegrator = 0
-        self.connectISRCEXT = 0
-
-class ADC:
-    adcData = None
-    xDataToDisplay = None
-    yDataToDisplay = None
-    ivData_voltage = None
-    ivData_current = None
-    ivCycles = None
-    voltageSweepIndex = None
-    idcOffset = None
-    idcRelative = None
-    adcDataRMS = None
-    poreResistance = None
-    rmsNoise = None
-    rmsNoise_100kHz = None
-    rmsNoise_1MHz = None
-    rmsNoise_10MHz = None
-    f = None
-    rdcfb = None
-    mbCommonModePotential = None
-    psd = None
-    psdFit = None
-    histogramView = None
-    bins = None
-    #amplifierList = [] # Using this creates a global scope list for some reason.
-
-    def __init__(self):
-        self.adcData = []
-        self.xDataToDisplay = []
-        self.yDataToDisplay = []
-        self.ivData_voltage = []
-        self.ivData_current = []
-        self.ivCycles = 0
-        self.voltageSweepIndex = 0
-        self.idcOffset = 0
-        self.idcRelative = 0
-        self.adcDataRMS = 0
-        self.poreResistance = 0
-        self.rmsNoise = 0
-        self.rmsNoise_100kHz = 0
-        self.rmsNoise_1MHz = 0
-        self.rmsNoise_10MHz = 0
-        self.f = []
-        self.rdcfb = 50e6
-        self.mbCommonModePotential = 0
-        self.psd = 0
-        self.psdFit = 0
-        self.histogramView = None
-        self.bins = None
-        self.amplifierList = []
-        for i in xrange(5):
-            self.amplifierList.append(AMPLIFIER())
+# class AMPLIFIER:
+#     gainIndex = None
+#     biasEnable = None
+#     connectElectrode = None
+#     enableSWCapClock = None
+#     triangleWave = None
+#     resetIntegrator = None
+#     connectISRCEXT = None
+#
+#     def __init__(self):
+#         self.gainIndex = 0
+#         self.biasEnable = 0
+#         self.connectElectrode = 0
+#         self.enableSWCapClock = 0
+#         self.enableTriangleWave = 0
+#         self.resetIntegrator = 0
+#         self.connectISRCEXT = 0
+#
+# class ADC:
+#     adcData = None
+#     xDataToDisplay = None
+#     yDataToDisplay = None
+#     ivData_voltage = None
+#     ivData_current = None
+#     idcOffset = None
+#     idcRelative = None
+#     poreResistance = None
+#     rmsNoise = None
+#     rmsNoise_100kHz = None
+#     rmsNoise_1MHz = None
+#     rmsNoise_10MHz = None
+#     f = None
+#     psd = None
+#     psdFit = None
+#     histogramView = None
+#     bins = None
+#     #amplifierList = [] # Using this creates a global scope list for some reason.
+#
+#     def __init__(self):
+#         self.adcData = []
+#         self.xDataToDisplay = []
+#         self.yDataToDisplay = []
+#         self.ivData_voltage = []
+#         self.ivData_current = []
+#         self.idcOffset = 0
+#         self.idcRelative = 0
+#         self.poreResistance = 0
+#         self.rmsNoise = 0
+#         self.rmsNoise_100kHz = 0
+#         self.rmsNoise_1MHz = 0
+#         self.rmsNoise_10MHz = 0
+#         self.f = []
+#         self.psd = 0
+#         self.psdFit = 0
+#         self.histogramView = None
+#         self.bins = None
+#         self.amplifierList = []
+#         for i in xrange(5):
+#             self.amplifierList.append(AMPLIFIER())
 
 class MainWindow(QtGui.QMainWindow):
 
@@ -207,32 +172,21 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.lineEdit_getDataFileSelect.setPlaceholderText("test")
         self.dataSize = 20000000
         self.dataFileSelected = "./test.hex"
-        # self.structInstance = struct.Struct('i' * (dictOfConstants['FRAMELENGTH']/4))
         self.ui.lineEdit_logDuration.setPlaceholderText("1")
         self.ui.lineEdit_RDCFB.setPlaceholderText("50")
-        self.MBCommonModePotential = 0
+        self.mbCommonModePotential = 0
         self.RDCFB = 50e6
-        self.f = [0]
-        self.PSD = [0]
-        self.RMSNoise_100kHz = 0
-        self.RMSNoise_1MHz = 0
         self.RAMMemoryUsage = 0.0
         self.ui.lineEdit_livePreviewFilterBandwidth.setPlaceholderText("100")
         self.livePreviewFilterBandwidth = 100e3
-        self.IDCOffset = 0
-        self.IVData_voltage = []
-        self.IVData_current = []
         self.voltageSweepIndex = 0
         self.IVCycles = 0
+        self.IVFirstPoint = False
+        self.IVData_voltageSweep = 0
 
         self.adcList = []
         for i in xrange(5):
-            self.adcList.append(ADC())
-
-        self.printTotal = 0
-        self.printCount = 0
-        self.linSpaceTotal = 0
-        self.linSpaceCount = 0
+            self.adcList.append(channelComponents.ADC())
 
         #######################################################################
 
@@ -257,7 +211,6 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_integratorReset.stateChanged.connect(self.checkBox_integratorReset_clicked)
         self.ui.checkBox_connectElectrode.stateChanged.connect(self.checkBox_connectElectrode_clicked)
         self.ui.checkBox_connectISRCEXT.stateChanged.connect(self.checkBox_connectISRCEXT_clicked)
-        #self.ui.pushButton_programChip.clicked.connect(self.pushButton_programChip_clicked)
 
         self.ui.action_enableLivePreview.triggered.connect(self.action_enableLivePreview_triggered)
         self.ui.action_reset.triggered.connect(self.pushButton_reset_clicked)
@@ -301,7 +254,6 @@ class MainWindow(QtGui.QMainWindow):
 
         # self.ui.label_poreResistance.mouseReleaseEvent = self.label_poreResistance_clicked()
 
-        #self.ui.checkBox_rowPlot_enable.clicked.connect(self.checkBox_rowPlot_enable_clicked) #TODO
         self.ui.pushBotton_MasterBiasElectrodeControlReset.clicked.connect(self.pushButton_master_bias_electrode_control_reset_clicked)
         self.ui.pushButton_resetAllAmplifiers.clicked.connect(self.pushButton_reset_all_amplifiers_clicked)
         self.ui.checkBox_rowPlotDataDisplay.clicked.connect(self.checkBox_rowPlotDataDisplay_clicked)
@@ -360,6 +312,21 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_column4_row2.clicked.connect(lambda: self.checkBox_master_bias_electrode_enable_clicked(row=2, column=4))
         self.ui.checkBox_column4_row3.clicked.connect(lambda: self.checkBox_master_bias_electrode_enable_clicked(row=3, column=4))
         self.ui.checkBox_column4_row4.clicked.connect(lambda: self.checkBox_master_bias_electrode_enable_clicked(row=4, column=4))
+
+        self.ui.label_rowPlotIDCOffsetArray = [self.ui.label_rowPlotColumn0IDCOffset, self.ui.label_rowPlotColumn1IDCOffset, self.ui.label_rowPlotColumn2IDCOffset, self.ui.label_rowPlotColumn3IDCOffset, self.ui.label_rowPlotColumn4IDCOffset]
+        self.ui.label_rowPlotIDCRelativeArray = [self.ui.label_rowPlotColumn0IDCRelative, self.ui.label_rowPlotColumn1IDCRelative, self.ui.label_rowPlotColumn2IDCRelative, self.ui.label_rowPlotColumn3IDCRelative, self.ui.label_rowPlotColumn4IDCRelative]
+        self.ui.label_rowPlotIDCNetArray = [self.ui.label_rowPlotColumn0IDCNet, self.ui.label_rowPlotColumn1IDCNet, self.ui.label_rowPlotColumn2IDCNet, self.ui.label_rowPlotColumn3IDCNet, self.ui.label_rowPlotColumn4IDCNet]
+
+        self.ui.label_rowPlot100kHzNoiseArray = [self.ui.label_rowPlotColumn0100kHzNoise, self.ui.label_rowPlotColumn1100kHzNoise, self.ui.label_rowPlotColumn2100kHzNoise, self.ui.label_rowPlotColumn3100kHzNoise, self.ui.label_rowPlotColumn4100kHzNoise]
+        self.ui.label_rowPlot1MHzNoiseArray = [self.ui.label_rowPlotColumn01MHzNoise, self.ui.label_rowPlotColumn11MHzNoise, self.ui.label_rowPlotColumn21MHzNoise, self.ui.label_rowPlotColumn31MHzNoise, self.ui.label_rowPlotColumn41MHzNoise]
+        self.ui.label_rowPlot10MHzNoiseArray = [self.ui.label_rowPlotColumn010MHzNoise, self.ui.label_rowPlotColumn110MHzNoise, self.ui.label_rowPlotColumn210MHzNoise, self.ui.label_rowPlotColumn310MHzNoise, self.ui.label_rowPlotColumn410MHzNoise]
+
+        self.ui.pushButton_rowPlotIDCSetOffsetArray = [self.ui.pushButton_rowPlotColumn0IDCSetOffset, self.ui.pushButton_rowPlotColumn1IDCSetOffset, self.ui.pushButton_rowPlotColumn2IDCSetOffset, self.ui.pushButton_rowPlotColumn3IDCSetOffset, self.ui.pushButton_rowPlotColumn4IDCSetOffset]
+        self.ui.pushButton_rowPlotColumn0IDCSetOffset.clicked.connect(lambda: self.pushButton_rowPlotIDCSetOffset_clicked(column=0))
+        self.ui.pushButton_rowPlotColumn1IDCSetOffset.clicked.connect(lambda: self.pushButton_rowPlotIDCSetOffset_clicked(column=1))
+        self.ui.pushButton_rowPlotColumn2IDCSetOffset.clicked.connect(lambda: self.pushButton_rowPlotIDCSetOffset_clicked(column=2))
+        self.ui.pushButton_rowPlotColumn3IDCSetOffset.clicked.connect(lambda: self.pushButton_rowPlotIDCSetOffset_clicked(column=3))
+        self.ui.pushButton_rowPlotColumn4IDCSetOffset.clicked.connect(lambda: self.pushButton_rowPlotIDCSetOffset_clicked(column=4))
 
         #######################################################################
         # Initializing Single Channel Plots
@@ -444,9 +411,7 @@ class MainWindow(QtGui.QMainWindow):
             self.ui.rowPlot_IV_columnArray[i].setLabel(axis='bottom', text='Voltage', units='V', **self.ui.rowPlot_style)
             self.ui.rowPlot_IV_columnArray[i].setLabel(axis='left', text='I', units='A', **self.ui.rowPlot_style)
             self.ui.rowPlot_IV_columnArray[i].disableAutoRange()
-        #TODO BELOW I don't know what this does yet
-        self.ui.graphicsView_IV_currentPoint_rowPlot_column0 = self.ui.graphicsView_IV_column0.plot([0], [0], symbol='o', symbolBrush='k', symbolSize=7)
-        #TODO ABOVE
+
 
         #######################################################################
         # Assigning menu items to functions
@@ -508,7 +473,7 @@ class MainWindow(QtGui.QMainWindow):
 
         self.IVTimer = QtCore.QTimer(self)
         self.IVTimer.timeout.connect(self.updateCounterelectrodePotential)
-        self.IVTimer.setInterval(dictOfConstants['IVTIMESTEP'])
+        self.IVTimer.setInterval(globalConstants.IVTIMESTEP)
 
         self.ui.action_reset.setChecked(1)
         time.sleep(0.01)
@@ -530,8 +495,8 @@ class MainWindow(QtGui.QMainWindow):
         #######################################################################
         # Create FPGA objects
         #######################################################################
-        self.FPGAMasterInstance = FPGA(masterSerial, 'Master')
-        self.FPGASlaveInstance = FPGA(slaveSerial, 'Slave')
+        self.FPGAMasterInstance = FPGA(globalConstants.masterSerial, 'Master')
+        self.FPGASlaveInstance = FPGA(globalConstants.slaveSerial, 'Slave')
         try:
             # self.FPGAMasterInstance.initializeDevice('Bitfiles/top_40M222.bit')
             # self.FPGAMasterInstance.initializeDevice('Bitfiles/top_40M22_integratorReset1.bit')
@@ -564,16 +529,17 @@ class MainWindow(QtGui.QMainWindow):
         # Thread instantiation
         #######################################################################
         self.PSDThread = QtCore.QThread()
-        self.PSDWorkerInstance = workerobjects.PSDWorker(self, dictOfConstants)
+        self.PSDWorkerInstance = workerobjects.PSDWorker(self)
         self.PSDWorkerInstance.moveToThread(self.PSDThread)
+        self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewSingleChannelPlot)
+        self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewRowPlot)
         self.PSDWorkerInstance.finished.connect(self.PSDThread.quit)
         self.PSDWorkerInstance.finished.connect(self.updateNoiseLabels)
         self.PSDThread.started.connect(self.PSDWorkerInstance.calculatePSD)
 
         self.processRawDataADC0Thread = QtCore.QThread()
-        self.processRawDataADC0WorkerInstance = workerobjects.ProcessRawDataWorker(self, dictOfConstants, 0)
+        self.processRawDataADC0WorkerInstance = workerobjects.ProcessRawDataWorker(self, 0)
         self.processRawDataADC0WorkerInstance.moveToThread(self.processRawDataADC0Thread)
-        #self.processRawDataADC0WorkerInstance.pycharm.connect(self.processRawDataADC0Thread.quit)
         self.processRawDataADC0WorkerInstance.finished.connect(self.processRawDataADC0Thread.quit)
         self.processRawDataADC0WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADC0WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
@@ -581,9 +547,8 @@ class MainWindow(QtGui.QMainWindow):
         self.processRawDataADC0Thread.started.connect(self.processRawDataADC0WorkerInstance.processRawData)
 
         self.processRawDataADC1Thread = QtCore.QThread()
-        self.processRawDataADC1WorkerInstance = workerobjects.ProcessRawDataWorker(self, dictOfConstants, 1)
+        self.processRawDataADC1WorkerInstance = workerobjects.ProcessRawDataWorker(self, 1)
         self.processRawDataADC1WorkerInstance.moveToThread(self.processRawDataADC1Thread)
-        #self.processRawDataADC1WorkerInstance.pycharm.connect(self.processRawDataADC1Thread.quit)
         self.processRawDataADC1WorkerInstance.finished.connect(self.processRawDataADC1Thread.quit)
         self.processRawDataADC1WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADC1WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
@@ -591,9 +556,8 @@ class MainWindow(QtGui.QMainWindow):
         self.processRawDataADC1Thread.started.connect(self.processRawDataADC1WorkerInstance.processRawData)
 
         self.processRawDataADC2Thread = QtCore.QThread()
-        self.processRawDataADC2WorkerInstance = workerobjects.ProcessRawDataWorker(self, dictOfConstants, 2)
+        self.processRawDataADC2WorkerInstance = workerobjects.ProcessRawDataWorker(self, 2)
         self.processRawDataADC2WorkerInstance.moveToThread(self.processRawDataADC2Thread)
-        #self.processRawDataADC2WorkerInstance.pycharm.connect(self.processRawDataADC1Thread.quit)
         self.processRawDataADC2WorkerInstance.finished.connect(self.processRawDataADC2Thread.quit)
         self.processRawDataADC2WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADC2WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
@@ -601,9 +565,8 @@ class MainWindow(QtGui.QMainWindow):
         self.processRawDataADC2Thread.started.connect(self.processRawDataADC2WorkerInstance.processRawData)
 
         self.processRawDataADC3Thread = QtCore.QThread()
-        self.processRawDataADC3WorkerInstance = workerobjects.ProcessRawDataWorker(self, dictOfConstants, 3)
+        self.processRawDataADC3WorkerInstance = workerobjects.ProcessRawDataWorker(self, 3)
         self.processRawDataADC3WorkerInstance.moveToThread(self.processRawDataADC3Thread)
-        #self.processRawDataADC3WorkerInstance.pycharm.connect(self.processRawDataADC3Thread.quit)
         self.processRawDataADC3WorkerInstance.finished.connect(self.processRawDataADC3Thread.quit)
         self.processRawDataADC3WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADC3WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
@@ -611,9 +574,8 @@ class MainWindow(QtGui.QMainWindow):
         self.processRawDataADC3Thread.started.connect(self.processRawDataADC3WorkerInstance.processRawData)
 
         self.processRawDataADC4Thread = QtCore.QThread()
-        self.processRawDataADC4WorkerInstance = workerobjects.ProcessRawDataWorker(self, dictOfConstants, 4)
+        self.processRawDataADC4WorkerInstance = workerobjects.ProcessRawDataWorker(self, 4)
         self.processRawDataADC4WorkerInstance.moveToThread(self.processRawDataADC4Thread)
-        #self.processRawDataADC4WorkerInstance.pycharm.connect(self.processRawDataADC4Thread.quit)
         self.processRawDataADC4WorkerInstance.finished.connect(self.processRawDataADC4Thread.quit)
         self.processRawDataADC4WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADC4WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
@@ -621,21 +583,21 @@ class MainWindow(QtGui.QMainWindow):
         self.processRawDataADC4Thread.started.connect(self.processRawDataADC4WorkerInstance.processRawData)
 
         self.getDataFromFPGAMasterThread = QtCore.QThread()
-        self.getDataFromFPGAMasterWorkerInstance = workerobjects.GetDataFromFPGAWorker(self, dictOfConstants, self.FPGAMasterInstance)
+        self.getDataFromFPGAMasterWorkerInstance = workerobjects.GetDataFromFPGAWorker(self, self.FPGAMasterInstance)
         self.getDataFromFPGAMasterWorkerInstance.moveToThread(self.getDataFromFPGAMasterThread)
         self.getDataFromFPGAMasterWorkerInstance.finished.connect(self.getDataFromFPGAMasterThread.quit)
         self.getDataFromFPGAMasterWorkerInstance.dataReady.connect(self.action_enableLogging_triggered)
         self.getDataFromFPGAMasterThread.started.connect(self.getDataFromFPGAMasterWorkerInstance.getDataFromFPGA)
 
         self.getDataFromFPGASlaveThread = QtCore.QThread()
-        self.getDataFromFPGASlaveWorkerInstance = workerobjects.GetDataFromFPGAWorker(self, dictOfConstants, self.FPGASlaveInstance)
+        self.getDataFromFPGASlaveWorkerInstance = workerobjects.GetDataFromFPGAWorker(self, self.FPGASlaveInstance)
         self.getDataFromFPGASlaveWorkerInstance.moveToThread(self.getDataFromFPGASlaveThread)
         self.getDataFromFPGASlaveWorkerInstance.finished.connect(self.getDataFromFPGASlaveThread.quit)
         self.getDataFromFPGASlaveWorkerInstance.dataReady.connect(self.action_enableLogging_triggered)
         self.getDataFromFPGASlaveThread.started.connect(self.getDataFromFPGASlaveWorkerInstance.getDataFromFPGA)
 
         self.writeToLogFileThread = QtCore.QThread()
-        self.writeToLogFileWorkerInstance = workerobjects.WriteToLogFileWorker(self, dictOfConstants)
+        self.writeToLogFileWorkerInstance = workerobjects.WriteToLogFileWorker(self)
         self.writeToLogFileWorkerInstance.moveToThread(self.writeToLogFileThread)
         self.writeToLogFileWorkerInstance.finished.connect(self.writeToLogFileThread.quit)
         # self.writeToLogFileWorkerInstance.finished.connect(self.action_enableLogging_triggered)
@@ -667,10 +629,6 @@ class MainWindow(QtGui.QMainWindow):
         self.getDataFromFPGAMasterThread.wait()
         self.getDataFromFPGASlaveThread.quit()
         self.getDataFromFPGASlaveThread.wait()
-        #self.processRawDataMasterThread.quit()
-        #self.processRawDataMasterThread.wait()
-        #self.processRawDataSlaveThread.quit()
-        #self.processRawDataSlaveThread.wait()
         self.processRawDataADC0Thread.quit()
         self.processRawDataADC0Thread.wait()
         self.processRawDataADC1Thread.quit()
@@ -692,17 +650,17 @@ class MainWindow(QtGui.QMainWindow):
         self.createFPGAObjects()
         self.createThreads()
 
-    def pushButton_reset_clicked(self):
+    def pushButton_reset_clicked(self): # TODO This makes transactions time-out with master.
         """Checks to see if the reset button has been pressed or not. Resets both FPGAs if the button is pressed"""
-        if (self.ui.pushButton_reset.isChecked() or self.ui.action_reset.isChecked()):
+        if (self.ui.action_reset.isChecked()):
             reset = 1
         else:
             reset = 0
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Master reset', 0x00, reset*self.resetMask, self.resetMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Master reset'])
-        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Slave reset', 0x00, reset*self.resetMask, self.resetMask])
-        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Slave reset'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Master reset', 0x00, reset*self.resetMask, self.resetMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Master reset'])
+        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Slave reset', 0x00, reset*self.resetMask, self.resetMask])
+        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Slave reset'])
 
     def checkBox_ADCenable_clicked(self):
         """Enables/Disables ADCs depending on the status of the enable all ADCs checkbox"""
@@ -730,8 +688,8 @@ class MainWindow(QtGui.QMainWindow):
         else:
             ADC0enableBar = 1
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 0', 0x00, ADC0enableBar*self.ADC0enableMask, self.ADC0enableMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 0'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 0', 0x00, ADC0enableBar*self.ADC0enableMask, self.ADC0enableMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 0'])
 
     def checkBox_ADC1enable_clicked(self):
         """Enables/Disables ADC1 depending on the status of its checkbox"""
@@ -740,8 +698,8 @@ class MainWindow(QtGui.QMainWindow):
         else:
             ADC1enableBar = 1
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 1', 0x00, ADC1enableBar*self.ADC1enableMask, self.ADC1enableMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 0'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 1', 0x00, ADC1enableBar*self.ADC1enableMask, self.ADC1enableMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 0'])
 
     def checkBox_ADC2enable_clicked(self):
         """Enables/Disables ADC2 depending on the status of its checkbox"""
@@ -750,8 +708,8 @@ class MainWindow(QtGui.QMainWindow):
         else:
             ADC2enableBar = 1
 
-        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 2', 0x00, ADC2enableBar*self.ADC2enableMask, self.ADC2enableMask])
-        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 2'])
+        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 2', 0x00, ADC2enableBar*self.ADC2enableMask, self.ADC2enableMask])
+        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 2'])
 
     def checkBox_ADC3enable_clicked(self):
         """Enables/Disables ADC3 depending on the status of its checkbox"""
@@ -760,8 +718,8 @@ class MainWindow(QtGui.QMainWindow):
         else:
             ADC3enableBar = 1
 
-        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 3', 0x00, ADC3enableBar*self.ADC3enableMask, self.ADC3enableMask])
-        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 3'])
+        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 3', 0x00, ADC3enableBar*self.ADC3enableMask, self.ADC3enableMask])
+        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 3'])
 
     def checkBox_ADC4enable_clicked(self):
         """Enables/Disables ADC4 depending on the status of its checkbox"""
@@ -770,17 +728,8 @@ class MainWindow(QtGui.QMainWindow):
         else:
             ADC4enableBar = 1
 
-        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 4', 0x00, ADC4enableBar*self.ADC4enableMask, self.ADC4enableMask])
-        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 4'])
-
-    def checkBox_rowPlot_enable_clicked(self):
-        """Enables/Disables column plot depending on the status of its checkbox"""
-        if (self.ui.checkBox_rowPlot_enable.isChecked()):
-            # TODO rowPlot checked
-            testVariable = 1
-        else:
-            # TODO rowPlot unchecked
-            testVariable = 0
+        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Could not disable ADC 4', 0x00, ADC4enableBar*self.ADC4enableMask, self.ADC4enableMask])
+        self.getDataFromFPGASlaveWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Could not disable ADC 4'])
 
     def checkBox_master_bias_electrode_enable_clicked(self, row, column):
         """Enables/Disables selected channel depending on the status of its checkbox"""
@@ -791,53 +740,54 @@ class MainWindow(QtGui.QMainWindow):
             biasEnable = 0
             connectElectrode = 0
 
-        # TODO Undo all of the updated output wire values associated with the pending amplifier
         shiftFactor = column*5  # Shift config bits by 5x depending on the xth column selected
         amplifierGain = self.amplifierGainMask[column] & ((self.amplifierGainOptions[self.adcList[column].amplifierList[row].gainIndex]) << shiftFactor)
 
         # Send new bias and electrode settings to selected amplifier
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, row, self.rowSelectMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[column]*biasEnable, self.biasEnableMask[column]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[column]*self.adcList[column].amplifierList[row].connectElectrode,self.connectElectrodeMask[column]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, row, self.rowSelectMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[column]*biasEnable, self.biasEnableMask[column]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[column]*self.adcList[column].amplifierList[row].connectElectrode,self.connectElectrodeMask[column]])
 
         # Set wires so other channel settings do not change on the selected channel
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[column]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[row]*self.adcList[column].amplifierList[row].resetIntegrator, self.integratorResetMask[row]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[column]*self.adcList[column].amplifierList[row].connectISRCEXT, self.connectISRCEXTMask[column]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[column].amplifierList[row].enableSWCapClock, self.enableSwitchedCapClockMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[column].amplifierList[row].enableTriangleWave, self.enableTriangleWaveMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[column]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[row]*self.adcList[column].amplifierList[row].resetIntegrator, self.integratorResetMask[row]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[column]*self.adcList[column].amplifierList[row].connectISRCEXT, self.connectISRCEXTMask[column]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[column].amplifierList[row].enableSWCapClock, self.enableSwitchedCapClockMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[column].amplifierList[row].enableTriangleWave, self.enableTriangleWaveMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
 
         # Reset all settings
         shiftFactor = self.columnSelect*5  # Shift config bits by 5x depending on the xth column selected
         amplifierGain = self.amplifierGainMask[self.columnSelect] & ((self.amplifierGainOptions[self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex]) << shiftFactor)
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.rowSelect, self.rowSelectMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode,self.connectElectrodeMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[self.rowSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.rowSelect, self.rowSelectMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode,self.connectElectrodeMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[self.rowSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
 
         # Update global settings
         self.adcList[column].amplifierList[row].biasEnable = biasEnable
         self.adcList[column].amplifierList[row].connectElectrode = connectElectrode
 
         if ((self.columnSelect == column) and (self.rowSelect == row)):
+            self.ui.checkBox_biasEnable.blockSignals(True)
+            self.ui.checkBox_connectElectrode.blockSignals(True)
             self.ui.checkBox_biasEnable.setChecked(biasEnable)
             self.ui.checkBox_connectElectrode.setChecked(biasEnable)
+            self.ui.checkBox_biasEnable.blockSignals(False)
+            self.ui.checkBox_connectElectrode.blockSignals(False)
 
     def pushButton_master_bias_electrode_control_reset_clicked(self):
         for row in xrange(5):
             for column in xrange(5):
-                if (self.ui.masterBiasElectrodeEnableCheckboxGrid[row][column].isChecked()):
-                    self.ui.masterBiasElectrodeEnableCheckboxGrid[row][column].setChecked(0)
-                self.checkBox_master_bias_electrode_enable_clicked(row, column)
+                self.ui.masterBiasElectrodeEnableCheckboxGrid[row][column].setChecked(0)
 
     def pushButton_reset_all_amplifiers_clicked(self):
         for row in xrange(5):
@@ -852,21 +802,29 @@ class MainWindow(QtGui.QMainWindow):
                 self.adcList[column].amplifierList[row].connectISRCEXT = 0
 
                 # Buffer commands to reset settings for a particular amplifier
+                # I do it this way to improve the speed and avoid filling the queue with repeated commands when not necessary
                 shiftFactor = column * 5  # Shift config bits by 5x depending on the xth column selected
                 amplifierGain = self.amplifierGainMask[column] & (0 << shiftFactor)
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, row, self.rowSelectMask])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[column]*0, self.biasEnableMask[column]])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[column]*0, self.connectElectrodeMask[column]])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[column]])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[row]*0, self.integratorResetMask[row]])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[column]*0, self.connectISRCEXTMask[column]])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*0, self.enableSwitchedCapClockMask])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*0, self.enableTriangleWaveMask])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
-                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, row, self.rowSelectMask])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[column]*0, self.biasEnableMask[column]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[column]*0, self.connectElectrodeMask[column]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[column]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[row]*0, self.integratorResetMask[row]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[column]*0, self.connectISRCEXTMask[column]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*0, self.enableSwitchedCapClockMask])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*0, self.enableTriangleWaveMask])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
 
-                # Reset ADC Control checkboxes
+                # Reset ADC Control checkboxes without triggering their handlers
                 self.ui.comboBox_amplifierGainSelect.blockSignals(True)
+                self.ui.checkBox_biasEnable.blockSignals(True)
+                self.ui.checkBox_connectElectrode.blockSignals(True)
+                self.ui.checkBox_enableSwitchedCapClock.blockSignals(True)
+                self.ui.checkBox_enableTriangleWave.blockSignals(True)
+                self.ui.checkBox_integratorReset.blockSignals(True)
+                self.ui.checkBox_connectISRCEXT.blockSignals(True)
+
                 self.ui.comboBox_amplifierGainSelect.setCurrentIndex(0)
                 self.ui.checkBox_biasEnable.setChecked(0)
                 self.ui.checkBox_connectElectrode.setChecked(0)
@@ -874,11 +832,19 @@ class MainWindow(QtGui.QMainWindow):
                 self.ui.checkBox_enableTriangleWave.setChecked(0)
                 self.ui.checkBox_integratorReset.setChecked(0)
                 self.ui.checkBox_connectISRCEXT.setChecked(0)
+
                 self.ui.comboBox_amplifierGainSelect.blockSignals(False)
+                self.ui.checkBox_biasEnable.blockSignals(False)
+                self.ui.checkBox_connectElectrode.blockSignals(False)
+                self.ui.checkBox_enableSwitchedCapClock.blockSignals(False)
+                self.ui.checkBox_enableTriangleWave.blockSignals(False)
+                self.ui.checkBox_integratorReset.blockSignals(False)
+                self.ui.checkBox_connectISRCEXT.blockSignals(False)
 
                 # Reset master bias/electrode control checkboxes
-                if (self.ui.masterBiasElectrodeEnableCheckboxGrid[row][column].isChecked()):
-                    self.ui.masterBiasElectrodeEnableCheckboxGrid[row][column].setChecked(0)
+                self.ui.masterBiasElectrodeEnableCheckboxGrid[row][column].blockSignals(True)
+                self.ui.masterBiasElectrodeEnableCheckboxGrid[row][column].setChecked(0)
+                self.ui.masterBiasElectrodeEnableCheckboxGrid[row][column].blockSignals(False)
 
     def checkBox_rowPlotDataDisplay_clicked(self):
         #DO NOT TOUCH THESE FUNCTIONS! SUPER UNSTABLE! GOOD LUCK!
@@ -929,14 +895,14 @@ class MainWindow(QtGui.QMainWindow):
             self.adjustSize()
             self.setFixedWidth(self.width())
 
-    def lineEdit_getDataSize_editingFinished(self):
-        """This method gets the data size to be saved from the text box called lineEdit_getDataSize once it is done being edited"""
-        try:
-            self.dataSize = int(eval(str(self.ui.lineEdit_getDataSize.displayText())))
-        except TypeError:
-            print "Enter the size of the data to be transferred in scientific notation"
-        # self.structInstance = struct.Struct('i' * (self.dataSize / 4))
-        print self.ui.lineEdit_getDataSize.displayText()
+    #def lineEdit_getDataSize_editingFinished(self):
+    #    """This method gets the data size to be saved from the text box called lineEdit_getDataSize once it is done being edited"""
+    #    try:
+    #        self.dataSize = int(eval(str(self.ui.lineEdit_getDataSize.displayText())))
+    #    except TypeError:
+    #       print "Enter the size of the data to be transferred in scientific notation"
+    #    # self.structInstance = struct.Struct('i' * (self.dataSize / 4))
+    #    print self.ui.lineEdit_getDataSize.displayText()
 
     def lineEdit_getDataFileSelect_editingFinished(self):
         """Displays the selected file in the lineEdit_getDataFileSelect box"""
@@ -956,33 +922,40 @@ class MainWindow(QtGui.QMainWindow):
         self.dataFolderSelected = folderSelecter.getExistingDirectory(self, "Select Folder", "./Logfiles")#, "./", filter="Hex files (*.hex)", selectedFilter="*.hex")
         self.ui.lineEdit_getDataFileSelect.setText(self.dataFolderSelected)
 
-    def pushButton_getData_clicked(self):
-        """Activates the file transfer. The length of the data is defined by the specified duration"""
-        self.ui.lineEdit_logDuration.setText(str(round(self.dataSize/dictOfConstants['FRAMELENGTH_MASTER']*dictOfConstants['FRAMEDURATION']/1000.0, 1)))
-        self.ui.action_enableLogging.setChecked(1)
+    #def pushButton_getData_clicked(self):
+    #    """Activates the file transfer. The length of the data is defined by the specified duration"""
+    #    self.ui.lineEdit_logDuration.setText(str(round(self.dataSize/globalConstants.FRAMELENGTH_MASTER*globalConstants.FRAMEDURATION/1000.0, 1)))
+    #    self.ui.action_enableLogging.setChecked(1)
 
     def comboBox_rowSelect_activated(self, index):
         """Sets the row selection for the chip (and the daughterboard)"""
         self.rowSelect = self.rowSelectOptions[index]
 
         # Reset all settings with new row selection
+        # I do it this way to reduce the number of repeated instructions fed to the command handler in the FPGA communication threads
         shiftFactor = self.columnSelect*5  # Shift config bits by 5x depending on the xth column selected
         amplifierGain = self.amplifierGainMask[self.columnSelect] & ((self.amplifierGainOptions[self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex]) << shiftFactor)
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.rowSelect, self.rowSelectMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode,self.connectElectrodeMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[self.rowSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.rowSelect, self.rowSelectMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode,self.connectElectrodeMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[self.rowSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
 
 
         # Update settings with programmed settings
         self.ui.comboBox_amplifierGainSelect.blockSignals(True)
+        self.ui.checkBox_biasEnable.blockSignals(True)
+        self.ui.checkBox_connectElectrode.blockSignals(True)
+        self.ui.checkBox_enableSwitchedCapClock.blockSignals(True)
+        self.ui.checkBox_enableTriangleWave.blockSignals(True)
+        self.ui.checkBox_integratorReset.blockSignals(True)
+        self.ui.checkBox_connectISRCEXT.blockSignals(True)
 
         self.ui.comboBox_amplifierGainSelect.setCurrentIndex(self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex)
         self.ui.checkBox_biasEnable.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable)
@@ -998,28 +971,40 @@ class MainWindow(QtGui.QMainWindow):
             self.ui.checkBox_enableSwitchedCapClock.setEnabled(0)
 
         self.ui.comboBox_amplifierGainSelect.blockSignals(False)
+        self.ui.checkBox_biasEnable.blockSignals(False)
+        self.ui.checkBox_connectElectrode.blockSignals(False)
+        self.ui.checkBox_enableSwitchedCapClock.blockSignals(False)
+        self.ui.checkBox_enableTriangleWave.blockSignals(False)
+        self.ui.checkBox_integratorReset.blockSignals(False)
+        self.ui.checkBox_connectISRCEXT.blockSignals(False)
 
     def comboBox_columnSelect_activated(self, index):
         """Sets the column selection for the chip. Clears out data for the other columns when a column switch is initiated"""
         self.columnSelect = index
-        self.IDCOffset = 0 # Clear out the offset current when column is changed # TODO Remove this if it is no longer used
 
         # Reset all settings with new column (no new row)
+        # I do it this way to reduce the number of repeated instructions fed to the command handler in the FPGA communication threads
         shiftFactor = self.columnSelect*5  # Shift config bits by 5x depending on the xth column selected
         amplifierGain = self.amplifierGainMask[self.columnSelect] & ((self.amplifierGainOptions[self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex]) << shiftFactor)
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode,self.connectElectrodeMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[self.rowSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode,self.connectElectrodeMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[self.rowSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
 
         # Update settings with programmed settings
         self.ui.comboBox_amplifierGainSelect.blockSignals(True)
+        self.ui.checkBox_biasEnable.blockSignals(True)
+        self.ui.checkBox_connectElectrode.blockSignals(True)
+        self.ui.checkBox_enableSwitchedCapClock.blockSignals(True)
+        self.ui.checkBox_enableTriangleWave.blockSignals(True)
+        self.ui.checkBox_integratorReset.blockSignals(True)
+        self.ui.checkBox_connectISRCEXT.blockSignals(True)
 
         self.ui.comboBox_amplifierGainSelect.setCurrentIndex(self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex)
         self.ui.checkBox_biasEnable.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable)
@@ -1030,6 +1015,12 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_connectISRCEXT.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT)
 
         self.ui.comboBox_amplifierGainSelect.blockSignals(False)
+        self.ui.checkBox_biasEnable.blockSignals(False)
+        self.ui.checkBox_connectElectrode.blockSignals(False)
+        self.ui.checkBox_enableSwitchedCapClock.blockSignals(False)
+        self.ui.checkBox_enableTriangleWave.blockSignals(False)
+        self.ui.checkBox_integratorReset.blockSignals(False)
+        self.ui.checkBox_connectISRCEXT.blockSignals(False)
 
         # Need to try because signal may not be connected at start of program
         try:
@@ -1052,12 +1043,12 @@ class MainWindow(QtGui.QMainWindow):
         shiftFactor = self.columnSelect*5 #Shift config bits by 5x depending on the xth column selected
         amplifierGain = self.amplifierGainMask[self.columnSelect] & ((self.amplifierGainOptions[amplifierGainSelect]) << shiftFactor)
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Changing feedback capacitance value failed', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Changing feedback capacitance value failed'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Changing feedback capacitance value failed', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Changing feedback capacitance value failed', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Changing feedback capacitance value failed'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Changing feedback capacitance value failed', 0x41, 1])
 
 
-    def checkBox_biasEnable_clicked(self, state):
+    def checkBox_biasEnable_clicked(self):
         """Determines whether the selected amplifier is enabled or not"""
         if (self.ui.checkBox_biasEnable.isChecked()):
             biasEnable = 1
@@ -1066,11 +1057,11 @@ class MainWindow(QtGui.QMainWindow):
             biasEnable = 0
             self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable = 0
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Enabling bias failed', 0x01, self.biasEnableMask[self.columnSelect]*biasEnable, self.biasEnableMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Enabling bias failed'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Enabling bias failed', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Enabling bias failed', 0x01, self.biasEnableMask[self.columnSelect]*biasEnable, self.biasEnableMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Enabling bias failed'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Enabling bias failed', 0x41, 1])
 
-    def checkBox_integratorReset_clicked(self, state):
+    def checkBox_integratorReset_clicked(self):
         """Sets the integrator reset switch (bypassing the feedback capacitor for the integrator). Use while electroplating Ag"""
         if (self.ui.checkBox_integratorReset.isChecked()):
             integratorReset = 1
@@ -1080,11 +1071,11 @@ class MainWindow(QtGui.QMainWindow):
             self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator = 0
         print "%x" %(self.integratorResetMask[self.rowSelect])
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Integrator reset failed', 0x01, self.integratorResetMask[self.rowSelect]*integratorReset, self.integratorResetMask[self.rowSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Integrator reset failed'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Integrator reset failed', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Integrator reset failed', 0x01, self.integratorResetMask[self.rowSelect]*integratorReset, self.integratorResetMask[self.rowSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Integrator reset failed'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Integrator reset failed', 0x41, 1])
 
-    def checkBox_connectElectrode_clicked(self, state):
+    def checkBox_connectElectrode_clicked(self):
         """Connects the electrode on the surface of the chip to the amplifier"""
         if (self.ui.checkBox_connectElectrode.isChecked()):
             connectElectrode = 1
@@ -1093,11 +1084,11 @@ class MainWindow(QtGui.QMainWindow):
             connectElectrode = 0
             self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode = 0
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Enabling bias failed', 0x01, self.connectElectrodeMask[self.columnSelect]*connectElectrode, self.connectElectrodeMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Enabling bias failed'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Enabling bias failed', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Enabling bias failed', 0x01, self.connectElectrodeMask[self.columnSelect]*connectElectrode, self.connectElectrodeMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Enabling bias failed'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Enabling bias failed', 0x41, 1])
 
-    def checkBox_connectISRCEXT_clicked(self, state):
+    def checkBox_connectISRCEXT_clicked(self):
         """Connects ISRCEXT (which is connected to a header on the daughterboard) to the amplifier"""
         if (self.ui.checkBox_connectISRCEXT.isChecked()):
             connectISRCEXT = 1
@@ -1106,16 +1097,14 @@ class MainWindow(QtGui.QMainWindow):
             connectISRCEXT = 0
             self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT = 0
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Connecting ISRCEXT failed', 0x01, self.connectISRCEXTMask[self.columnSelect]*connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Connecting ISRCEXT failed'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Connecting ISRCEXT failed', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Connecting ISRCEXT failed', 0x01, self.connectISRCEXTMask[self.columnSelect]*connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Connecting ISRCEXT failed'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Connecting ISRCEXT failed', 0x41, 1])
 
     def action_enableLivePreview_triggered(self):
         """This method is called whenever the corresponding checkbox is clicked. If live preview is enabled, this method creates a worker thread to get data from the FPGA assuming one doesn't exist already"""
         if (self.ui.action_enableLivePreview.isChecked()):
-            # print dictOfConstants['FRAMELENGTH']
             self.start = time.clock()
-            # print self.start
             if not (self.getDataFromFPGAMasterThread.isRunning()):
                 self.getDataFromFPGAMasterThread.start()
             if not (self.getDataFromFPGASlaveThread.isRunning()):
@@ -1129,9 +1118,9 @@ class MainWindow(QtGui.QMainWindow):
             logDuration = 1000
         if (self.ui.action_enableLogging.isChecked()):
             self.frameCounter += 1
-            if (self.writeToLogFileWorkerInstance.rawData.qsize() >= dictOfConstants['REFRESHRATE']):
+            if (self.writeToLogFileWorkerInstance.rawData.qsize() >= globalConstants.REFRESHRATE): # qsize returns approximate number of items in queue
                 self.writeToLogFileThread.start() # Write data to disk as soon as there is 1 second's worth to be written
-            if (self.frameCounter == dictOfConstants['REFRESHRATE'] * logDuration / 1000):
+            if (self.frameCounter == globalConstants.REFRESHRATE * logDuration / 1000):
                 self.ui.action_enableLogging.toggle()
                 self.frameCounter = 0
         else:
@@ -1143,72 +1132,56 @@ class MainWindow(QtGui.QMainWindow):
     def displayLivePreviewSingleChannelPlot(self, column):
         """This method plots self.dataToDisplay from the worker thread that gets data from the FPGA and processes it. The data being displayed is already a subsampled version of the full data. PyQtGraph then displays the data in the GUI."""
         self.start = time.clock()
+        currentIndex = self.ui.tabWidget_plot.currentIndex()
+
         if (self.ui.action_enableLivePreview.isChecked() and column == self.columnSelect):
-            if (0 == self.ui.tabWidget_plot.currentIndex()):
+            if (0 == currentIndex):
                 self.ui.graphicsView_time_plot.setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
                 if (self.ui.action_addVerticalMarker.isChecked() == True):
                     self.graphicsView_time_updateMarkerText()
-            elif (1 == self.ui.tabWidget_plot.currentIndex() and 0 not in self.adcList[column].psd):
+            elif (1 == currentIndex and 0 not in self.adcList[column].psd):
                 self.ui.graphicsView_frequency_plot.setData(self.adcList[column].f, self.adcList[column].psd)
                 if (self.ui.action_addVerticalMarker.isChecked() == True):
                     self.graphicsView_frequency_updateMarkerText()
                 if (self.ui.action_addNoiseFit.isChecked() == True and hasattr(self.adcList[column], 'psdFit')):
                     self.ui.graphicsView_frequencyFit_plot.setData(self.adcList[column].f, self.adcList[column].psdFit)
-            elif (2 == self.ui.tabWidget_plot.currentIndex()):
+            elif (2 == currentIndex):
                 self.ui.graphicsView_histogram_plot.setData(self.adcList[column].histogramView, self.adcList[column].bins[0:len(self.adcList[column].bins)-1] + (self.adcList[column].bins[1]-self.adcList[column].bins[0])/2)
-            elif (3 == self.ui.tabWidget_plot.currentIndex()):
-                if self.IVData_voltage != []:
-                    self.ui.graphicsView_IV_plot.setData(self.IVData_voltage, self.IVData_current)
-                    self.ui.graphicsView_IV_currentPoint.setData([self.IVData_voltage[-1]], [self.IVData_current[-1]])
+            elif (3 == currentIndex):
+                if self.adcList[column].ivData_voltage != []:
+                    self.ui.graphicsView_IV_plot.setData(self.adcList[column].ivData_voltage, self.adcList[column].ivData_current)
+                    self.ui.graphicsView_IV_currentPoint.setData([self.adcList[column].ivData_voltage[-1]], [self.adcList[column].ivData_current[-1]])
             self.stop = time.clock()
             # print "Main GUI thread took", self.stop-self.start, "s"
 
     def displayLivePreviewRowPlot(self, column):
         """This method plots self.dataToDisplay from the worker thread that gets data from the FPGA and processes it. The data being displayed is already a subsampled version of the full data. PyQtGraph then displays the data in the GUI."""
         self.start = time.clock()
-        if (self.ui.action_enableLivePreview.isChecked()):
-            if (0 == self.ui.tabWidget_rowPlot.currentIndex()):
-                # if (0 == column):
-                #     preXData = time.clock()
-                # xdata = numpy.linspace(0, len(self.adcList[column].dataToDisplay) * dictOfConstants['SUBSAMPLINGFACTOR'] * 1.0 / dictOfConstants['ADCSAMPLINGRATE'], len(self.adcList[column].dataToDisplay))
-                # if (0 == column):
-                #     prePrint = time.clock()
+        currentIndex = self.ui.tabWidget_rowPlot.currentIndex()
+
+        if ((self.ui.action_enableLivePreview.isChecked() and self.ui.checkBox_rowPlotPlotsDisplay.isChecked())):
+            if (0 == currentIndex):
                 self.ui.rowPlot_time_columnPlotArray[column].setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
-                # if (0 == column):
-                #     postPrint = time.clock()
-                #     self.linSpaceTotal += prePrint-preXData
-                #     self.linSpaceCount += 1
-                #     self.printTotal += postPrint-prePrint
-                #     self.printCount += 1
-                #     print "Debug Point 2 linspace average: time = ", self.linSpaceTotal/self.linSpaceCount
-                #     print "Debug Point 2 print average: time = ", self.printTotal/self.printCount
-                #if (self.ui.action_addVerticalMarker.isChecked() == True):
-                #    self.graphicsView_time_updateMarkerText()  #TODO
-            # elif (1 == self.ui.tabWidget_rowPlot.currentIndex() and 0 not in self.adcList[column].psd):
-            #     self.ui.rowPlot_frequency_columnPlotArray[column].setData(self.adcList[column].f, self.adcList[column].psd)
-            #     if (self.ui.action_addVerticalMarker.isChecked() == True):
-            #         self.graphicsView_frequency_updateMarkerText()
-            #     if (self.ui.action_addNoiseFit.isChecked() == True and hasattr(self, 'psdFit')):
-            #         self.ui.graphicsView_frequencyFit_plot[column].setData(self.adcList[column].f, self.adcList[column].psdFit)
-            # elif (2 == self.ui.tabWidget_rowPlot.currentIndex()):
-            #     self.ui.rowPlot_histogram_columnPlotArray[column].setData(self.adcList[column].histogramView, self.adcList[column].bins[0:len(self.adcList[column].bins)-1] + (self.adcList[column].bins[1]-self.adcList[column].bins[0])/2)
-            # elif (3 == self.ui.tabWidget_rowPlot.currentIndex()):
-            #     if self.adcList[column].IVData_voltage != []:
-            #         self.ui.rowPlot_tIV_columnPlotArray[column].setData(self.adcList[column].IVData_voltage, self.adcList[column].IVData_current)
-            #         self.ui.graphicsView_IV_currentPoint.setData([self.adcList[column].IVData_voltage[-1]], [self.adcList[column].IVData_current[-1]])
+            elif (1 == currentIndex and 0 not in self.adcList[column].psd):
+                self.ui.rowPlot_frequency_columnPlotArray[column].setData(self.adcList[column].f, self.adcList[column].psd)
+            elif (2 == currentIndex):
+                self.ui.rowPlot_histogram_columnPlotArray[column].setData(self.adcList[column].histogramView, self.adcList[column].bins[0:len(self.adcList[column].bins)-1] + (self.adcList[column].bins[1]-self.adcList[column].bins[0])/2)
+            elif (3 == currentIndex):
+                if self.adcList[column].ivData_voltage != []:
+                    self.ui.rowPlot_IV_columnPlotArray[column].setData(self.adcList[column].ivData_voltage, self.adcList[column].ivData_current)
             self.stop = time.clock()
             # print "Main GUI thread took", self.stop-self.start, "s"
 
-    def updateReferenceelectrodePotential(self, value=0):
+    def updateReferenceelectrodePotential(self, value=0.0):
         """Updates the reference electrode potential. This is called once at the start of the program to set the reference potential to 900mV and subsequently everytime the counter electrode is set to 0 relative potential."""
         newValue = value + 0.9
         newValue = max(newValue, 0) #Setting lower limit
         newValue = min(newValue, 1.8*255/256) #Setting upper limit (1.8 * 255/256)
         referenceelectrodePotential = int(round(newValue/1.8 * 256)) * 2**9 #2^9 because DAC0ConfigMask starts from bit 9
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to set reference electrode potential', 0x00, referenceelectrodePotential, self.DAC0ConfigMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to set reference electrode potential'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to set reference electrode potential', 0x41, 2])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to set reference electrode potential', 0x00, referenceelectrodePotential, self.DAC0ConfigMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to set reference electrode potential'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to set reference electrode potential', 0x41, 2])
 
         print "Set reference electrode potential to", (newValue * 1000), "mV"
 
@@ -1221,39 +1194,40 @@ class MainWindow(QtGui.QMainWindow):
             if (self.IVFirstPoint is True):
                 self.IVFirstPoint = False
             else:
-                self.IVData_voltage.append(self.IVData_voltageSweep[self.voltageSweepIndex-1])
-                self.IVData_current.append(self.adcList[self.columnSelect].idcRelative)
+                for column in xrange(5):
+                    self.adcList[column].ivData_voltage.append(self.IVData_voltageSweep[self.voltageSweepIndex-1])
+                    self.adcList[column].ivData_current.append(self.adcList[column].idcRelative)
             self.voltageSweepIndex %= len(self.IVData_voltageSweep)
             newValue = self.IVData_voltageSweep[self.voltageSweepIndex] + 0.9
             self.voltageSweepIndex += 1
             if (self.voltageSweepIndex == 1):
                 self.IVCycles += 1
-                if (dictOfConstants['IVNUMBEROFCYCLES'] != 0):
-                    if (self.IVCycles > dictOfConstants['IVNUMBEROFCYCLES']):
+                if (globalConstants.IVNUMBEROFCYCLES != 0):
+                    if (self.IVCycles > globalConstants.IVNUMBEROFCYCLES):
                         self.ui.action_enableIV.setChecked(False)
-                        self.action_enableIV_triggered()
                         self.IVCycles = 0
                 else:
                     self.IVCycles = 0
+
         counterelectrodePotential = int(round(newValue/1.8 * 256)) * 2**17 #2^17 because DAC1ConfigMask starts from bit 17
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to set counter electrode potential', 0x00, counterelectrodePotential, self.DAC1ConfigMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to set counter electrode potential'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to set counter electrode potential', 0x41, 2])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to set counter electrode potential', 0x00, counterelectrodePotential, self.DAC1ConfigMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to set counter electrode potential'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to set counter electrode potential', 0x41, 2])
 
         self.ui.lineEdit_counterelectrodePotential.setText(str(round((newValue - 0.9) * 1000)))
 
     def updateMBCommonModePotential(self):
         """Updates the motherboard common mode potential. This is called once every second or so to set the potential to the value specified in the options window but action is taken only if the value was changed."""
-        if (self.adcList[self.columnSelect].mbCommonModePotential != dictOfConstants['MBCOMMONMODE']):
-            self.adcList[self.columnSelect].mbCommonModePotential = dictOfConstants['MBCOMMONMODE'] # Nominally should be 1.65 V
-            mbCommonModePotential_approximate = int(round(self.adcList[self.columnSelect].mbCommonModePotential/3.3 * 256)) * 2**9 #2^9 because DAC0ConfigMask starts from bit 9
+        if (self.mbCommonModePotential != globalConstants.MBCOMMONMODE):
+            self.mbCommonModePotential = globalConstants.MBCOMMONMODE # Nominally should be 1.65 V
+            mbCommonModePotential_approximate = int(round(self.mbCommonModePotential/3.3 * 256)) * 2**9 #2^9 because DAC0ConfigMask starts from bit 9
 
-            self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to set mb common mode electrode potential', 0x02, mbCommonModePotential_approximate, self.DACMBConfigMask])
-            self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to set mb common mode electrode potential'])
-            self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to set mb common mode electrode potential', 0x41, 3])
+            self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to set mb common mode electrode potential', 0x02, mbCommonModePotential_approximate, self.DACMBConfigMask])
+            self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to set mb common mode electrode potential'])
+            self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to set mb common mode electrode potential', 0x41, 3])
 
-            print "Set motherboard common mode potential to", (self.adcList[self.columnSelect].mbCommonModePotential * 1000), "mV" # TODO Are the potentials board-wide? I think so. Therefore change
+            print "Set motherboard common mode potential to", (self.mbCommonModePotential * 1000), "mV"
 
 
     def pushButton_IDCSetOffset_clicked(self):
@@ -1261,17 +1235,34 @@ class MainWindow(QtGui.QMainWindow):
         self.adcList[self.columnSelect].idcOffset += self.adcList[self.columnSelect].idcRelative
         self.ui.label_IDCOffset.setText(str(self.adcList[self.columnSelect].idcOffset * 1e9))
 
+    def pushButton_rowPlotIDCSetOffset_clicked(self, column):
+        """Updates the DC offset current value so that the current being viewed has no DC component left in it"""
+        self.adcList[column].idcOffset += self.adcList[column].idcRelative
+        self.ui.label_rowPlotIDCOffsetArray[column].setText(str(self.adcList[column].idcOffset * 1e9))
+
     def updateIDCLabels(self):
         """Update labels on the GUI indicating the DC offset current, DC relative current and DC net current"""
         self.ui.label_IDCOffset.setText(str(round(self.adcList[self.columnSelect].idcOffset * 1e9, 1)))
         self.ui.label_IDCRelative.setText(str(round(self.adcList[self.columnSelect].idcRelative * 1e9, 1)))
         self.ui.label_IDCNet.setText(str(round((self.adcList[self.columnSelect].idcOffset + self.adcList[self.columnSelect].idcRelative) * 1e9, 1)))
 
+        if(hasattr(self.ui, 'verticalWidget_rowPlotData') and self.ui.checkBox_rowPlotDataDisplay.isChecked() == True):
+            for column in xrange(5):
+                self.ui.label_rowPlotIDCOffsetArray[column].setText(str(round(self.adcList[column].idcOffset * 1e9, 1)))
+                self.ui.label_rowPlotIDCRelativeArray[column].setText(str(round(self.adcList[column].idcRelative * 1e9, 1)))
+                self.ui.label_rowPlotIDCNetArray[column].setText(str(round((self.adcList[column].idcOffset + self.adcList[column].idcRelative) * 1e9, 1)))
+
     def updateNoiseLabels(self):
         """Update labels on the GUI indicating the integrated noise values at 100 kHz, 1 MHz and 10 MHz bandwidths"""
         self.ui.label_100kHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_100kHz))
         self.ui.label_1MHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_1MHz))
         self.ui.label_10MHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_10MHz))
+
+        if(hasattr(self.ui, 'verticalWidget_rowPlotData') and self.ui.checkBox_rowPlotDataDisplay.isChecked() == True):
+            for column in xrange(5):
+                self.ui.label_rowPlot100kHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_100kHz))
+                self.ui.label_rowPlot1MHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_1MHz))
+                self.ui.label_rowPlot10MHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_10MHz))
 
     def label_bufferUtilizationUpdate(self):
         """Update label on the GUI indicating RAM utilization on the FPGA that is acquiring the data currently being displayed"""
@@ -1283,14 +1274,14 @@ class MainWindow(QtGui.QMainWindow):
 
     def lineEdit_RDCFB_editingFinished(self):
         """Reads in the new value of RDCFB from the GUI once it has been edited"""
-        oldRDCFB = self.adcList[self.columnSelect].rdcfb
+        oldRDCFB = self.RDCFB
         try:
-            self.adcList[self.columnSelect].rdcfb = eval(str(self.ui.lineEdit_RDCFB.text()))*1e6
-            if self.adcList[self.columnSelect].rdcfb == 0:
-                self.adcList[self.columnSelect].rdcfb = oldRDCFB
+            self.RDCFB = eval(str(self.ui.lineEdit_RDCFB.text()))*1e6
+            if self.RDCFB == 0:
+                self.RDCFB = oldRDCFB
         except:
-            self.adcList[self.columnSelect].rdcfb = 50*1e6
-        self.ui.lineEdit_RDCFB.setText(str(round(self.adcList[self.columnSelect].rdcfb/1e6, 1)))
+            self.RDCFB = 50*1e6
+        self.ui.lineEdit_RDCFB.setText(str(round(self.RDCFB/1e6, 1)))
 
     def checkBox_enableTriangleWave_clicked(self):
         """Changes the pattern on the counterelectrode potential to a triangle wave. The actual code that generates the counterelectrode potential values to create the triangle wave is on the FPGA"""
@@ -1299,9 +1290,9 @@ class MainWindow(QtGui.QMainWindow):
         else:
             enableTriangleWave = 0
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to enable triangle wave', 0x00, enableTriangleWave*self.enableTriangleWaveMask, self.enableTriangleWaveMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to enable triangle wave'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to enable triangle wave', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to enable triangle wave', 0x00, enableTriangleWave*self.enableTriangleWaveMask, self.enableTriangleWaveMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to enable triangle wave'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to enable triangle wave', 0x41, 1])
 
         #Reset to old value if triangle wave is turned off
         if not (self.ui.checkBox_enableTriangleWave.isChecked()):
@@ -1315,9 +1306,9 @@ class MainWindow(QtGui.QMainWindow):
         else:
             enableSquareWave = 0
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to enable square wave', 0x00, enableSquareWave*self.enableSquareWaveMask, self.enableSquareWaveMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to enable square wave'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to enable square wave', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to enable square wave', 0x00, enableSquareWave*self.enableSquareWaveMask, self.enableSquareWaveMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to enable square wave'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to enable square wave', 0x41, 1])
 
         #Reset to old value if square wave is turned off
         if not (self.ui.checkBox_enableSquareWave.isChecked()):
@@ -1332,28 +1323,32 @@ class MainWindow(QtGui.QMainWindow):
             enableSwitchedCapClock = 0
         self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock = enableSwitchedCapClock
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to enable square wave', 0x02, enableSwitchedCapClock*self.enableSwitchedCapClockMask, self.enableSwitchedCapClockMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to enable square wave'])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to enable square wave', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to enable square wave', 0x02, enableSwitchedCapClock*self.enableSwitchedCapClockMask, self.enableSwitchedCapClockMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to enable square wave'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to enable square wave', 0x41, 1])
 
-
-
-    def action_enableIV_triggered(self): # TODO
+    def action_enableIV_triggered(self):
         """This method activates the IV measurement setup"""
         if not (self.FPGAMasterInstance.configured is True and self.FPGASlaveInstance.configured is True):
+            self.ui.action_enableIV.blockSignals(True)
             self.ui.action_enableIV.setChecked(False)
-        if dictOfConstants['PRESETMODE'] != 1:
+            self.ui.action_enableIV.blockSignals(False)
+        if globalConstants.PRESETMODE != 1:
+            self.ui.action_enableIV.blockSignals(True)
             self.ui.action_enableIV.setChecked(False)
+            self.ui.action_enableIV.blockSignals(False)
         if (self.ui.action_enableIV.isChecked()):
             self.IVFirstPoint = True
-            self.IVData_voltage = []
-            self.IVData_current = []
+            for column in xrange(5):
+                self.adcList[column].ivData_voltage = []
+                self.adcList[column].ivData_current = []
+                self.ui.rowPlot_IV_columnArray[column].clear()
             self.voltageSweepIndex = 0
             self.ui.graphicsView_IV_plot.clear()
-            forwardSweep = numpy.arange(dictOfConstants['IVSTARTVOLTAGE'], dictOfConstants['IVSTOPVOLTAGE'], dictOfConstants['IVVOLTAGESTEP']/1000.)
-            reverseSweep = numpy.arange(dictOfConstants['IVSTOPVOLTAGE'], dictOfConstants['IVSTARTVOLTAGE'], -dictOfConstants['IVVOLTAGESTEP']/1000.)
+            forwardSweep = numpy.arange(globalConstants.IVSTARTVOLTAGE, globalConstants.IVSTOPVOLTAGE, globalConstants.IVVOLTAGESTEP/1000.)
+            reverseSweep = numpy.arange(globalConstants.IVSTOPVOLTAGE, globalConstants.IVSTARTVOLTAGE, -globalConstants.IVVOLTAGESTEP/1000.)
             self.IVData_voltageSweep = numpy.hstack(numpy.asarray([forwardSweep, reverseSweep]))
-            self.IVTimer.setInterval(dictOfConstants['IVTIMESTEP'])
+            self.IVTimer.setInterval(globalConstants.IVTIMESTEP)
             self.IVTimer.start()
         else:
             self.IVTimer.stop()
@@ -1375,23 +1370,39 @@ class MainWindow(QtGui.QMainWindow):
 
     def action_saveState_triggered(self, configSaveFileSelected = None): # TODO
         """Saves a variety of options from the GUI into a cfg file for easy loading later on"""
-        stateConfig = {'rowSelect': self.ui.comboBox_rowSelect.currentIndex(),
-        'columnSelect': self.ui.comboBox_columnSelect.currentIndex(),
-        'amplifierGainSelect': self.ui.comboBox_amplifierGainSelect.currentIndex(),
-        'biasEnable': self.ui.checkBox_biasEnable.isChecked(),
-        'integratorReset': self.ui.checkBox_integratorReset.isChecked(),
-        'connectElectrode': self.ui.checkBox_connectElectrode.isChecked(),
-        'connectISRCEXT': self.ui.checkBox_connectISRCEXT.isChecked(),
-        'RDCFB': self.RDCFB,
-        'IDCOffset': self.IDCOffset}
-        print configSaveFileSelected
         if (configSaveFileSelected is None):
             fileSelecter = QtGui.QFileDialog()
-            configSaveFileSelected = fileSelecter.getSaveFileName(self, "Choose file", "./", filter="Config files (*.cfg)", selectedFilter="*.cfg")
+            configSaveFileSelected = fileSelecter.getSaveFileName(self, "Choose file", "./Config/", filter="Config files (*.cfg)", selectedFilter="*.cfg")
         try:
             f = open(configSaveFileSelected, 'w')
         except:
             return False
+        print configSaveFileSelected
+        stateConfig = []
+
+        stateConfig.append({'ADC0Enable': self.ui.checkBox_ADC0enable.isChecked(),
+                          'ADC1Enable'  : self.ui.checkBox_ADC1enable.isChecked(),
+                          'ADC2Enable'  : self.ui.checkBox_ADC2enable.isChecked(),
+                          'ADC3Enable'  : self.ui.checkBox_ADC3enable.isChecked(),
+                          'ADC4Enable'  : self.ui.checkBox_ADC4enable.isChecked(),
+                          'columnSelect': self.columnSelect,
+                          'rowSelect'   : self.rowSelect,
+                          'RDCFB'       : self.RDCFB})
+        #json.dump(adcStateConfig, f, indent=0)
+
+        for column in xrange(5):
+            for row in xrange(5):
+                stateConfig.append({'row': row,
+                               'column': column,
+                               'amplifierGainSelect': self.adcList[column].amplifierList[row].gainIndex,
+                               'biasEnable': self.adcList[column].amplifierList[row].biasEnable,
+                               'integratorReset': self.adcList[column].amplifierList[row].resetIntegrator,
+                               'connectElectrode': self.adcList[column].amplifierList[row].connectElectrode,
+                               'connectISRCEXT': self.adcList[column].amplifierList[row].connectISRCEXT,
+                               'enableSWCapClock': self.adcList[column].amplifierList[row].enableSWCapClock,
+                               'enableTriangleWave': self.adcList[column].amplifierList[row].enableTriangleWave,
+                               'IDCOffset': self.adcList[column].idcOffset})
+
         json.dump(stateConfig, f, indent=0)
         f.close()
         print "Saving state!"
@@ -1399,75 +1410,94 @@ class MainWindow(QtGui.QMainWindow):
     def action_loadState_triggered(self):
         """Loads a previously saved state (cfg file)"""
         fileSelecter = QtGui.QFileDialog()
-        configLoadFileSelected = fileSelecter.getOpenFileName(self, "Choose file", "./", filter="Config files (*.cfg)", selectedFilter="*.cfg")
+        configLoadFileSelected = fileSelecter.getOpenFileName(self, "Choose file", "./Config/", filter="Config files (*.cfg)", selectedFilter="*.cfg")
         try:
             f = open(configLoadFileSelected, 'r')
         except:
             return False
+
         stateConfig = json.load(f)
         self.loadState(stateConfig)
+
         f.close()
         print "Loading from state!"
 
     def loadState(self, stateConfig):
         """This method handles the actual loading of the cfg file"""
-        self.loadStateConfig = {\
-            'ADC0Mode': [lambda x: self.ui.comboBox_ADC0Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC0Mode_activated(x)],\
-            'ADC1Mode': [lambda x: self.ui.comboBox_ADC1Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC1Mode_activated(x)],\
-            'ADC2Mode': [lambda x: self.ui.comboBox_ADC2Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC2Mode_activated(x)],\
-            'ADC3Mode': [lambda x: self.ui.comboBox_ADC3Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC3Mode_activated(x)],\
-            'ADC4Mode': [lambda x: self.ui.comboBox_ADC4Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC4Mode_activated(x)],\
-            'rowSelect': [lambda x: self.ui.comboBox_rowSelect.setCurrentIndex(x),\
-                        lambda x: self.comboBox_rowSelect_activated(x)],\
-            'columnSelect': [lambda x: self.ui.comboBox_columnSelect.setCurrentIndex(x),\
-                        lambda x: self.comboBox_columnSelect_activated(x)],\
-            'amplifierGainSelect': [lambda x: self.ui.comboBox_amplifierGainSelect.setCurrentIndex(x),\
-                        lambda x: self.comboBox_amplifierGainSelect_activated(x)],\
-            'biasEnable': [lambda x: self.ui.checkBox_biasEnable.setChecked(x)],\
-            'integratorReset': [lambda x: self.ui.checkBox_integratorReset.setChecked(x)],\
-            'connectElectrode': [lambda x: self.ui.checkBox_connectElectrode.setChecked(x)],\
-            'connectISRCEXT': [lambda x: self.ui.checkBox_connectISRCEXT.setChecked(x)],\
-            'RDCFB': [lambda x: self.ui.lineEdit_RDCFB.setText(str(round(x/1e6, 1))),\
-                        lambda x: self.lineEdit_RDCFB_editingFinished()],\
-            'IDCOffset': [lambda x: self.updateIDCOffset(x)]}
 
-        # Load columnSelect information first so that it doesn't reset the others
-        # Refer self.comboBox_columnSelect_activated for more information
-        stateConfig_columnSelect = stateConfig.pop('columnSelect', None)
-        for i in range(len(self.loadStateConfig['columnSelect'])):
-            self.loadStateConfig['columnSelect'][i](stateConfig_columnSelect)
+        for i in xrange(len(stateConfig)):
+            adc0Enable = stateConfig[i].pop('ADC0Enable', None)
+            adc1Enable = stateConfig[i].pop('ADC1Enable', None)
+            adc2Enable = stateConfig[i].pop('ADC2Enable', None)
+            adc3Enable = stateConfig[i].pop('ADC3Enable', None)
+            adc4Enable = stateConfig[i].pop('ADC4Enable', None)
+            columnSelect = stateConfig[i].pop('columnSelect', None)
+            rowSelect = stateConfig[i].pop('rowSelect', None)
+            RDCFB = stateConfig[i].pop('RDCFB', None)
 
-        # Loop over the remaining keys in the cfg file and set them accordingly
-        for key in stateConfig:
-            if key == 'biasEnable':
-                self.ui.checkBox_biasEnable.setChecked(1)
-            try:
-                for i in range(len(self.loadStateConfig[key])):
-                    self.loadStateConfig[key][i](stateConfig[key])
-            except:
-                print "Failed at ", key
-        self.pushButton_programChip_clicked()
+            if (None != adc0Enable):
+                self.ui.checkBox_ADC0enable.setChecked(adc0Enable)
+            if (None != adc1Enable):
+                self.ui.checkBox_ADC1enable.setChecked(adc1Enable)
+            if (None != adc2Enable):
+                self.ui.checkBox_ADC2enable.setChecked(adc2Enable)
+            if (None != adc3Enable):
+                self.ui.checkBox_ADC3enable.setChecked(adc3Enable)
+            if (None != adc4Enable):
+                self.ui.checkBox_ADC4enable.setChecked(adc4Enable)
+            if (None != columnSelect):
+                self.columnSelect = columnSelect
+            if (None != rowSelect):
+                self.rowSelect = rowSelect
+            if (None != RDCFB):
+                self.RDCFB = RDCFB
+                self.ui.lineEdit_RDCFB.setText(str(round(RDCFB/1e6, 1)))
 
-    def action_compressData_triggered(self):
-        self.compressDataWindow0 = CompressData(dictOfConstants)
+            # Load column and row information first for indexing the rest
+            column = stateConfig[i].pop('column', columnSelect) # default to columnSelect for backwards compatability
+            row = stateConfig[i].pop('row', rowSelect) # default to rowSelect for backwards compatability
+            # If the global configuration stateConfig entry is not present the single channel data will be loaded.
+            # Otherwise, the columnSelect and rowSelect will be used but eventually overwritten.
+            # Works for now
+
+            if ((None != column) and (None != row)):
+                self.adcList[column].amplifierList[row].biasEnable = stateConfig[i].pop('biasEnable', 0)
+                self.adcList[column].amplifierList[row].connectElectrode = stateConfig[i].pop('connectElectrode', 0)
+                self.adcList[column].amplifierList[row].gainIndex = stateConfig[i].pop('amplifierGainSelect', 0)
+                self.adcList[column].amplifierList[row].resetIntegrator = stateConfig[i].pop('integratorReset', 0)
+                self.adcList[column].amplifierList[row].connectISRCEXT = stateConfig[i].pop('connectISRCEXT', 0)
+                self.adcList[column].amplifierList[row].enableSWCapClock = stateConfig[i].pop('enableSWCapClock', 0)
+                self.adcList[column].amplifierList[row].enableTriangleWave = stateConfig[i].pop('enableTriangleWave', 0)
+                self.adcList[column].idcOffset = stateConfig[i].pop('IDCOffset', 0) # TODO This is being overwritten over and over again but until we implement all 25 channels
+
+                shiftFactor = column * 5  # Shift config bits by 5x depending on the xth column selected
+                amplifierGain = self.amplifierGainMask[column] & ((self.amplifierGainOptions[self.adcList[column].amplifierList[row].gainIndex]) << shiftFactor)
+
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[column] * self.adcList[column].amplifierList[row].biasEnable, self.biasEnableMask[column]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[column] * self.adcList[column].amplifierList[row].connectElectrode, self.connectElectrodeMask[column]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[column]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[row] * self.adcList[column].amplifierList[row].resetIntegrator, self.integratorResetMask[row]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[column] * self.adcList[column].amplifierList[row].connectISRCEXT, self.connectISRCEXTMask[column]])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask * self.adcList[column].amplifierList[row].enableSWCapClock, self.enableSwitchedCapClockMask])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask * self.adcList[column].amplifierList[row].enableTriangleWave, self.enableTriangleWaveMask])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+
+    def action_compressData_triggered(self): # TODO
+        self.compressDataWindow0 = CompressData()
         self.compressDataWindow0.show()
 
-    def updateIDCOffset(self, value):
+    def updateIDCOffset(self, value): # TODO
         """Method created to facilitate loading in the DC offset current value in the dictionary style loading"""
         self.adcList[self.columnSelect].idcOffset = value
         self.updateIDCLabels()
 
-    def action_options_triggered(self):
+    def action_options_triggered(self): # TODO
         """Creates an options window"""
-        self.optionsWindow0 = OptionsWindow(dictOfConstants)
+        self.optionsWindow0 = OptionsWindow()
         self.optionsWindow0.show()
 
-    def openLoadOldDataWindow(self):
+    def openLoadOldDataWindow(self): # TODO
         """Creates the GUI for viewing previously saved hex data"""
         self.loadOldDataWindow0 = LoadOldDataWindow()
         self.loadOldDataWindow0.show()
@@ -1512,7 +1542,7 @@ class MainWindow(QtGui.QMainWindow):
             self.ui.graphicsView_time.marker.x = 0
             self.ui.graphicsView_time.marker.sigPositionChanged.connect(self.graphicsView_time_updateMarkerText)
             self.ui.graphicsView_time.markerValue = pyqtgraph.TextItem('X=0\nY=0', anchor = (1,0), color='g')
-            self.ui.graphicsView_time.markerValue.setPos(len(self.adcList[self.columnSelect].dataToDisplay)*dictOfConstants['SUBSAMPLINGFACTOR']*1.0/dictOfConstants['ADCSAMPLINGRATE'], numpy.max(self.adcList[self.columnSelect].dataToDisplay))
+            self.ui.graphicsView_time.markerValue.setPos(self.adcList[self.columnSelect].xDataToDisplay, numpy.max(self.adcList[self.columnSelect].yDataToDisplay))
             self.ui.graphicsView_time.addItem(self.ui.graphicsView_time.marker)
             self.ui.graphicsView_time.addItem(self.ui.graphicsView_time.markerValue)
 
@@ -1533,7 +1563,7 @@ class MainWindow(QtGui.QMainWindow):
         """Updates the labels at the top right of the plot whenever the marker is moved in the time view"""
         self.ui.graphicsView_time.marker.x = float(self.ui.graphicsView_time.marker.value())
         try:
-            self.ui.graphicsView_time.marker.y = self.adcList[self.columnSelect].dataToDisplay[int(self.ui.graphicsView_time.marker.x/dictOfConstants['SUBSAMPLINGFACTOR']*dictOfConstants['ADCSAMPLINGRATE'])]
+            self.ui.graphicsView_time.marker.y = self.adcList[self.columnSelect].yDataToDisplay[int(self.ui.graphicsView_time.marker.x/globalConstants.SUBSAMPLINGFACTOR*globalConstants.ADCSAMPLINGRATE)]
         except:
             self.ui.graphicsView_time.marker.y = 0
         self.ui.graphicsView_time.markerValue.setPlainText('X=' + '%.3E s' % self.ui.graphicsView_time.marker.x + '\nY=%.3E A' % self.ui.graphicsView_time.marker.y)
@@ -1555,7 +1585,7 @@ class MainWindow(QtGui.QMainWindow):
         """Adds a fit to the noise PSD. The data is fit to a*f^-1 + b + c*f + d*f^2"""
         if (self.ui.action_addNoiseFit.isChecked() == True):
             self.ui.graphicsView_frequencyFit_plot = self.ui.graphicsView_frequency.plot(numpy.linspace(100, 10e6, 100), numpy.ones(100), pen='k', width=2)
-            self.displayLivePreviewSingleChannelPlot()
+            self.displayLivePreviewSingleChannelPlot(self.columnSelect)
         else:
             self.ui.graphicsView_frequency.removeItem(self.ui.graphicsView_frequencyFit_plot)
 

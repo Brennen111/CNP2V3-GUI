@@ -7,23 +7,23 @@ from shutil import copy
 import numpy
 
 class CompressData(QtGui.QMainWindow):
-    def __init__(self, dictOfConstants):
+    def __init__(self):
         QtGui.QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-
-        self.dictOfConstants = dictOfConstants
 
         self.ui.pushButton_getDataFileSelect.clicked.connect(self.pushButton_getDataFileSelect_clicked)
         self.ui.checkBox_autoDetectColumnSelect.stateChanged.connect(self.checkBox_autoDetectColumnSelect_stateChanged)
         self.ui.comboBox_columnSelect.activated.connect(self.comboBox_columnSelect_activated)
 
         # The method from the worker object is used directly in the main GUI thread in this window
-        self.processRawDataWorkerInstance = workerobjects.ProcessRawDataWorker(self, dictOfConstants, None)
+        self.processRawDataWorkerInstance = workerobjects.ProcessRawDataWorker(self, 0) # TODO
 
     def pushButton_getDataFileSelect_clicked(self):
+        if not os.path.exists("./Logfiles"):
+            os.makedirs("./Logfiles")
         fileSelecter = QtGui.QFileDialog()
-        listLoadFileSelected = fileSelecter.getOpenFileNames(self, "Choose file", "./", filter="Hex files (*.hex)", selectedFilter="*.hex")
+        listLoadFileSelected = fileSelecter.getOpenFileNames(self, "Choose file(s)", "./Logfiles", filter="Hex files (*.hex)", selectedFilter="*.hex")
         listLoadFileSelected = [str(x).replace('\\', '/') for x in listLoadFileSelected]
         for dataLoadFileSelected in listLoadFileSelected:
             if dataLoadFileSelected != '':
@@ -42,8 +42,8 @@ class CompressData(QtGui.QMainWindow):
                     self.f = open(configLoadFileSelected, 'r')
                     stateConfig = json.load(self.f)
                     # self.loadState(stateConfig)
-                    self.ui.comboBox_columnSelect.setCurrentIndex(stateConfig['columnSelect'])
-                    self.comboBox_columnSelect_activated(stateConfig['columnSelect'])
+                    self.ui.comboBox_columnSelect.setCurrentIndex(stateConfig[0]['columnSelect'])
+                    self.comboBox_columnSelect_activated(stateConfig[0]['columnSelect']) # TODO Is this necessary?
                     self.f.close()
                 except:
                     print "Could not find a corresponding cfg file"
@@ -68,6 +68,7 @@ class CompressData(QtGui.QMainWindow):
 
     def comboBox_columnSelect_activated(self, index):
         self.columnSelect = index
+        self.processRawDataWorkerInstance.validColumn = index
 
     def writeCompressedDataToDisk(self):
         self.defaultDirectory = self.currentDirectoryName[:-1] + '_compressed/'
@@ -79,7 +80,6 @@ class CompressData(QtGui.QMainWindow):
             self.f = open(self.fileName, 'w+b')
         else:
             self.f = open(self.fileName, 'a+b')
-        # While logging is enabled, write in 1 second bursts. Finish writing everything that is in memory when logging is disabled
         self.f.write(self.compressedData)
         self.f.close()
         self.configFileName = self.currentDirectoryName + self.currentHexFileName[0:-3] + "cfg"

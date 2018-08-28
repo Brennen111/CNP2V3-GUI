@@ -3,38 +3,19 @@ import sys
 from PyQt4 import QtGui, QtCore
 import time
 import numpy
-import workerobjects
 import pyqtgraph, pyqtgraph.exporters
 import json
 import os, glob
 
+import globalConstants
+import workerobjects
+import channelComponents
 from loadOldData_gui import Ui_MainWindow
 from optionswindow import OptionsWindow
 from progressbar import ProgressBarWindow
 
 pyqtgraph.setConfigOption('background', 'w') #Set background to white
 pyqtgraph.setConfigOption('foreground', 'k') #Set foreground to black
-
-ADCBITS = 12
-SUBSAMPLINGFACTOR = 10
-REFRESHRATE = 10 # in frames per second
-AAFILTERGAIN = (51+620)/620.0*1.8*.51
-ADCSAMPLINGRATE = 4000000
-FRAMEDURATION = 1000/REFRESHRATE
-FRAMELENGTH_MASTER = (((ADCSAMPLINGRATE*FRAMEDURATION/1000)*4)/4000000 + 0)*4000000 # Multiplied by 4 because of the specific FPGA data packing implementation
-FRAMELENGTH_SLAVE = (int((ADCSAMPLINGRATE*FRAMEDURATION/1000)*4*4.0/3)/4000000 + 1)*4000000 #Slave data is packed with 3/4 efficiency
-# BLOCKLENGTH = 1024
-BLOCKLENGTH = 256 # While transferring data from the FPGA, the transaction is broken up into blocks of this length (in bytes)
-MBCOMMONMODE = 1.65 # Nominal common mode voltage for the motherboard is 1.65 V
-PRESETMODE = 1
-SQUAREWAVEAMPLITUDE = 0.9
-IVSTARTVOLTAGE = -0.5
-IVSTOPVOLTAGE = 0.5
-IVVOLTAGESTEP = 100
-IVTIMESTEP = 500
-IVNUMBEROFCYCLES = 0
-
-dictOfConstants = {'ADCBITS':ADCBITS, 'SUBSAMPLINGFACTOR': SUBSAMPLINGFACTOR, 'REFRESHRATE': REFRESHRATE, 'AAFILTERGAIN': AAFILTERGAIN, 'ADCSAMPLINGRATE': ADCSAMPLINGRATE, 'FRAMEDURATION': FRAMEDURATION, 'FRAMELENGTH_MASTER': FRAMELENGTH_MASTER, 'FRAMELENGTH_SLAVE': FRAMELENGTH_SLAVE, 'BLOCKLENGTH': BLOCKLENGTH, 'MBCOMMONMODE': MBCOMMONMODE, 'SQUAREWAVEAMPLITUDE': SQUAREWAVEAMPLITUDE, 'PRESETMODE': PRESETMODE, 'IVSTARTVOLTAGE': IVSTARTVOLTAGE, 'IVSTOPVOLTAGE': IVSTOPVOLTAGE, 'IVVOLTAGESTEP': IVVOLTAGESTEP, 'IVTIMESTEP': IVTIMESTEP, 'IVNUMBEROFCYCLES': IVNUMBEROFCYCLES}
 
 class LoadOldDataWindow(QtGui.QMainWindow):
     def __init__(self, parent=None):
@@ -47,28 +28,39 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         # Default initializations
         #######################################################################
         self.ui.lineEdit_RDCFB.setPlaceholderText("50")
-        self.f = None
         self.columnSelect = 0
         self.RDCFB = 50e6
         self.ui.lineEdit_livePreviewFilterBandwidth.setPlaceholderText("100")
         self.livePreviewFilterBandwidth = 100e3
+        self.dataLoadFileSelected = ''
+        self.masterRawData = []
+        self.slaveRawData = []
+        self.masterDataInMemory = 0
+        self.slaveDataInMemory = 0
         self.dataInMemory = 0
-        self.IDCOffset = 0
-        self.IDCRelative = 0
-        self.RMSNoise_100kHz = 0
-        self.RMSNoise_1MHz = 0
-        self.RMSNoise_10MHz = 0
+        #self.IDCOffset = 0
+        #self.IDCRelative = 0
+        #self.f = []
+        #self.PSD = []
+        #self.dataToDisplay = []
+        #self.RMSNoise_100kHz = 0
+        #self.RMSNoise_1MHz = 0
+        #self.RMSNoise_10MHz = 0
         self.threshold = None
         self.currentEvent = 1
         self.histogramModeSelect = 0
         self.thresholdType = 0
+
+        self.adcList = []
+        for i in xrange(5):
+            self.adcList.append(channelComponents.ADC())
 
         #######################################################################
         # Connecting signals to relevant functions
         #######################################################################
         self.ui.comboBox_columnSelect.activated.connect(self.comboBox_columnSelect_activated)
 
-        self.ui.tabWidget_plot.currentChanged.connect(self.displayData)
+        self.ui.tabWidget_plot.currentChanged.connect(self.updateDisplayData)
 
         self.ui.action_loadData.triggered.connect(self.action_loadData_triggered)
         self.ui.action_nextFile.triggered.connect(self.action_nextFile_triggered)
@@ -139,17 +131,17 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         # Thread instantiation
         #######################################################################
         self.PSDThread = QtCore.QThread()
-        self.PSDWorkerInstance = workerobjects.PSDWorker(self, dictOfConstants)
+        self.PSDWorkerInstance = workerobjects.PSDWorker(self)
         self.PSDWorkerInstance.moveToThread(self.PSDThread)
+        self.PSDWorkerInstance.PSDReady.connect(self.displayData)
         self.PSDWorkerInstance.finished.connect(self.PSDThread.quit)
         self.PSDWorkerInstance.finished.connect(self.updateNoiseLabels)
-        self.PSDWorkerInstance.finished.connect(self.displayData)
         self.PSDWorkerInstance.finished.connect(self.closeProgressBar)
         self.PSDWorkerInstance.progress.connect(self.updateProgressBar)
         self.PSDThread.started.connect(self.PSDWorkerInstance.calculatePSD)
 
         self.processRawDataThread = QtCore.QThread()
-        self.processRawDataWorkerInstance = workerobjects.ProcessRawDataWorker(self, dictOfConstants, None)
+        self.processRawDataWorkerInstance = workerobjects.ProcessRawDataWorker(self, 0) # TODO
         self.processRawDataWorkerInstance.moveToThread(self.processRawDataThread)
         self.processRawDataWorkerInstance.finished.connect(self.processRawDataThread.quit)
         self.processRawDataWorkerInstance.dataReady.connect(self.displayData)
@@ -158,7 +150,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.processRawDataThread.started.connect(self.processRawDataWorkerInstance.processRawData)
 
         self.analyzeDataThread = QtCore.QThread()
-        self.analyzeDataWorkerInstance = workerobjects.AnalyzeDataWorker(self, dictOfConstants)
+        self.analyzeDataWorkerInstance = workerobjects.AnalyzeDataWorker(self)
         self.analyzeDataWorkerInstance.moveToThread(self.analyzeDataThread)
         self.analyzeDataWorkerInstance.finished.connect(self.analyzeDataThread.quit)
         self.analyzeDataWorkerInstance.finished.connect(self.displayAnalysis)
@@ -195,7 +187,8 @@ class LoadOldDataWindow(QtGui.QMainWindow):
     def comboBox_columnSelect_activated(self, index):
         """Sets the column selection for the chip. Clears out data about the DC offset current when a column switch is initiated"""
         self.columnSelect = index
-        self.IDCOffset = 0 # Clear out the offset current when column is changed
+        self.processRawDataWorkerInstance.validColumn = self.columnSelect
+        self.PSDWorkerInstance.validColumn = self.columnSelect
         if self.dataInMemory == 1:
             self.showProgressBar(10)
             self.updateProgressBar(0, 'Reading file')
@@ -217,10 +210,10 @@ class LoadOldDataWindow(QtGui.QMainWindow):
     def action_loadData_triggered(self):
         """Loads a previously saved hex file for viewing. Also searches for a similarly named cfg file to load in the experimental parameters"""
         fileSelecter = QtGui.QFileDialog()
-        dataLoadFileSelected = fileSelecter.getOpenFileName(self, "Choose file", "./", filter="Hex files (*.hex)", selectedFilter="*.hex")
-        if dataLoadFileSelected != '':
-            self.currentHexFileName = str(dataLoadFileSelected.split('/')[-1])
-            self.currentDirectoryName = str(dataLoadFileSelected[:-len(self.currentHexFileName)])
+        self.dataLoadFileSelected = fileSelecter.getOpenFileName(self, "Choose file", "./", filter="Hex files (*.hex)", selectedFilter="*.hex")
+        if self.dataLoadFileSelected != '':
+            self.currentHexFileName = str(self.dataLoadFileSelected.split('/')[-1])
+            self.currentDirectoryName = str(self.dataLoadFileSelected[:-len(self.currentHexFileName)])
             self.ui.action_deleteFile.setEnabled(True)
             hexFileList = [os.path.split(x)[1] for x in glob.glob(self.currentDirectoryName + '*.hex')]
             currentHexFileIndex = hexFileList.index(self.currentHexFileName)
@@ -233,13 +226,13 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                 self.ui.action_nextFile.setEnabled(True)
             else:
                 self.ui.action_nextFile.setEnabled(False)
-            self.loadHexData(dataLoadFileSelected)
+            self.loadHexData()
 
-    def loadHexData(self, dataLoadFileSelected=""):
+    def loadHexData(self):
         self.dataInMemory = 0
-        print dataLoadFileSelected
-        if dataLoadFileSelected != "":
-            configLoadFileSelected = dataLoadFileSelected[0:len(dataLoadFileSelected) - 3] + "cfg"
+        print self.dataLoadFileSelected
+        if self.dataLoadFileSelected != "":
+            configLoadFileSelected = self.dataLoadFileSelected[0:len(self.dataLoadFileSelected) - 3] + "cfg"
             try:
                 self.f = open(configLoadFileSelected, 'r')
                 stateConfig = json.load(self.f)
@@ -247,17 +240,17 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                 self.f.close()
             except:
                 print "Could not find a corresponding cfg file"
-            self.f = open(dataLoadFileSelected, 'rb')
+            self.f = open(self.dataLoadFileSelected, 'rb')
             self.processRawDataWorkerInstance.rawData = self.f.read()
             # self.processRawDataWorkerInstance.rawData = self.processRawDataWorkerInstance.rawData[0:len(self.processRawDataWorkerInstance.rawData)/10]
             print len(self.processRawDataWorkerInstance.rawData)
-            windowTitle = dataLoadFileSelected.split('/')[-2] + '/' + dataLoadFileSelected.split('/')[-1]
+            windowTitle = self.dataLoadFileSelected.split('/')[-2] + '/' + self.dataLoadFileSelected.split('/')[-1]
             self.setWindowTitle(windowTitle)
             # self.processRawDataWorkerInstance.rawData = self.processRawDataWorkerInstance.rawData[:-1]
             self.f.close()
             self.dataInMemory = 1
             self.baseline = None
-            # with open(dataLoadFileSelected, 'rb') as self.f:
+            # with open(self.dataLoadFileSelected, 'rb') as self.f:
                 # for line in self.f:
                     # self.rawData = line
             if (self.processRawDataThread.isRunning()):
@@ -324,20 +317,23 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         else:
             pass
 
+    def updateDisplayData(self):
+        self.displayData(self.columnSelect)
+
     def displayData(self, column):
         """This method plots self.dataToDisplay from the worker thread that loads data from the file and processes it. The data being displayed is already a subsampled version of the full data. PyQtGraph then displays the data in the GUI."""
         self.start = time.clock()
         if (True):
             if (0 == self.ui.tabWidget_plot.currentIndex()):
-                self.ui.graphicsView_time_plot.setData(numpy.linspace(0, len(self.dataToDisplay)*dictOfConstants['SUBSAMPLINGFACTOR']*1.0/dictOfConstants['ADCSAMPLINGRATE'], len(self.dataToDisplay)), self.dataToDisplay)
+                self.ui.graphicsView_time_plot.setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
                 if (self.ui.action_addVerticalMarker.isChecked() == True):
                     self.graphicsView_time_updateMarkerText()
-            elif (1 == self.ui.tabWidget_plot.currentIndex() and 0 not in self.PSD):
-                self.ui.graphicsView_frequency_plot.setData(self.f, self.PSD)
+            elif (1 == self.ui.tabWidget_plot.currentIndex() and 0 not in self.adcList[column].psd):
+                self.ui.graphicsView_frequency_plot.setData(self.adcList[column].f, self.adcList[column].psd)
                 if (self.ui.action_addVerticalMarker.isChecked() == True):
                     self.graphicsView_frequency_updateMarkerText()
-                if (self.ui.action_addNoiseFit.isChecked() == True):# and hasattr(self, PSDFit)):
-                    self.ui.graphicsView_frequencyFit_plot.setData(self.f, self.PSDFit)
+                if (self.ui.action_addNoiseFit.isChecked() == True and hasattr(self.adcList[column], 'psdFit')):
+                    self.ui.graphicsView_frequencyFit_plot.setData(self.adcList[column].f, self.adcList[column].psdFit)
             elif (2 == self.ui.tabWidget_plot.currentIndex()):
                 if (hasattr(self, 'dwellTime')):
                     if (self.histogramModeSelect == 0):
@@ -347,13 +343,13 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                         self.ui.graphicsView_histogram.setLabel(axis='bottom', text='Dwell Time', units='s')
                         self.ui.graphicsView_histogram.setLabel(axis='left', text='I', units='A')
                     elif (self.histogramModeSelect == 1):
-                        self.histogramView, self.bins = numpy.histogram(numpy.hstack(self.eventValue), bins=200)
-                        self.ui.graphicsView_histogram_plot.setData(self.histogramView, self.bins[0:len(self.bins)-1] + (self.bins[1]-self.bins[0])/2, pen='b', symbol=None)
+                        self.adcList[column].histogramView, self.adcList[column].bins = numpy.histogram(numpy.hstack(self.eventValue), bins=200)
+                        self.ui.graphicsView_histogram_plot.setData(self.adcList[column].histogramView, self.adcList[column].bins[0:len(self.adcList[column].bins)-1] + (self.adcList[column].bins[1]-self.adcList[column].bins[0])/2, pen='b', symbol=None)
                         self.ui.graphicsView_histogram.setLabel(axis='bottom', text='Count', units='')
                         self.ui.graphicsView_histogram.setLabel(axis='left', text='I', units='A')
                         # self.ui.graphicsView_histogram_plot.setData(self.bins, self.histogramView, stepMode=True, pen='b', symbol=None)
                 elif (hasattr(self, 'histogramView')):
-                    self.ui.graphicsView_histogram_plot.setData(self.histogramView, self.bins[0:len(self.bins)-1] + (self.bins[1]-self.bins[0])/2)
+                    self.ui.graphicsView_histogram_plot.setData(self.adcList[column].histogramView, self.adcList[column].bins[0:len(self.adcList[column].bins)-1] + (self.adcList[column].bins[1]-self.adcList[column].bins[0])/2)
                     self.ui.graphicsView_histogram.setLabel(axis='bottom', text='Count', units='')
                     self.ui.graphicsView_histogram.setLabel(axis='left', text='I', units='A')
                 else:
@@ -364,56 +360,49 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                 if (self.ui.checkBox_enableCUSUM.isChecked()):
                     self.ui.graphicsView_eventViewer_plotFit.setData(indexValuesToPlot[100:-101].astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate, numpy.hstack(self.meanEventValue[self.currentEvent-1]), pen='k', width=2)
                     self.ui.graphicsView_eventViewer_plotFit.setPen(self.eventFitColor[self.currentEvent-1])
-                # self.ui.graphicsView_eventViewer_plotFit.setData(indexValuesToPlot[500:1000].astype(numpy.float)/dictOfConstants['ADCSAMPLINGRATE'], numpy.hstack(self.meanEventValue[self.currentEvent-1]), pen='k', width=2)
+                # self.ui.graphicsView_eventViewer_plotFit.setData(indexValuesToPlot[500:1000].astype(numpy.float)/globalConstants.ADCSAMPLINGRATE, numpy.hstack(self.meanEventValue[self.currentEvent-1]), pen='k', width=2)
             self.stop = time.clock()
             # print "Main GUI thread took", self.stop-self.start, "s"
 
     def action_options_triggered(self):
         """Creates an options window"""
-        self.optionsWindow0 = OptionsWindow(dictOfConstants)
+        self.optionsWindow0 = OptionsWindow()
         self.optionsWindow0.show()
         self.optionsWindow0.accepted.connect(self.displayData)
 
     def loadState(self, stateConfig):
         """This method handles the actual loading of the cfg file"""
-        self.loadStateConfig = {\
-            'ADC0Mode': [lambda x: self.ui.comboBox_ADC0Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC0Mode_activated(x)],\
-            'ADC1Mode': [lambda x: self.ui.comboBox_ADC1Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC1Mode_activated(x)],\
-            'ADC2Mode': [lambda x: self.ui.comboBox_ADC2Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC2Mode_activated(x)],\
-            'ADC3Mode': [lambda x: self.ui.comboBox_ADC3Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC3Mode_activated(x)],\
-            'ADC4Mode': [lambda x: self.ui.comboBox_ADC4Mode.setCurrentIndex(x),\
-                        lambda x: self.comboBox_ADC4Mode_activated(x)],\
-            'rowSelect': [lambda x: self.ui.comboBox_rowSelect.setCurrentIndex(x),\
-                        lambda x: self.comboBox_rowSelect_activated(x)],\
-            'columnSelect': [lambda x: self.ui.comboBox_columnSelect.setCurrentIndex(x),\
-                        lambda x: self.comboBox_columnSelect_activated(x)],\
-            'amplifierGainSelect': [lambda x: self.ui.comboBox_amplifierGainSelect.setCurrentIndex(x),\
-                        lambda x: self.comboxBox_amplifierGainSelect_activated(x)],\
-            'biasEnable': [lambda x: self.ui.checkBox_biasEnable.setChecked(x)],\
-            'integratorReset': [lambda x: self.ui.checkBox_integratorReset.setChecked(x)],\
-            'connectElectrode': [lambda x: self.ui.checkBox_connectElectrode.setChecked(x)],\
-            'connectISRCEXT': [lambda x: self.ui.checkBox_connectISRCEXT.setChecked(x)],\
-            'RDCFB': [lambda x: self.ui.lineEdit_RDCFB.setText(str(round(x/1e6, 1))),\
-                        lambda x: self.lineEdit_RDCFB_editingFinished()],\
-            'IDCOffset': [lambda x: self.updateIDCOffset(x)]}
+        for i in xrange(len(stateConfig)):
+            columnSelect = stateConfig[i].pop('columnSelect', None)
+            rowSelect = stateConfig[i].pop('rowSelect', None)
+            RDCFB = stateConfig[i].pop('RDCFB', None)
 
-        # Load columnSelect information first so that it doesn't reset the others
-        # Refer self.comboBox_columnSelect_activated for more information
-        stateConfig_columnSelect = stateConfig.pop('columnSelect', None)
-        for i in range(len(self.loadStateConfig['columnSelect'])):
-            self.loadStateConfig['columnSelect'][i](stateConfig_columnSelect)
+            if (None != columnSelect):
+                self.columnSelect = columnSelect
+            if (None != rowSelect):
+                self.rowSelect = rowSelect
+            if (None != RDCFB):
+                self.RDCFB = RDCFB
+                self.ui.lineEdit_RDCFB.setText(str(round(RDCFB/1e6, 1)))
 
-        # Loop over the remaining keys in the cfg file and set them accordingly
-        for key in stateConfig:
-            try:
-                for i in range(len(self.loadStateConfig[key])):
-                    self.loadStateConfig[key][i](stateConfig[key])
-            except:
-                print "Failed at ", key
+            # Load column and row information first for indexing the rest
+            column = stateConfig[i].pop('column', columnSelect) # default to columnSelect for backwards compatability
+            row = stateConfig[i].pop('row', rowSelect) # default to rowSelect for backwards compatability
+            # If the global configuration stateConfig entry is not present the single channel data will be loaded.
+            # Otherwise, the columnSelect and rowSelect will be used but eventually overwritten.
+            # Works for now
+
+            if ((None != column) and (None != row)):
+                self.adcList[column].amplifierList[row].biasEnable = stateConfig[i].pop('biasEnable', 0)
+                self.adcList[column].amplifierList[row].connectElectrode = stateConfig[i].pop('connectElectrode', 0)
+                self.adcList[column].amplifierList[row].gainIndex = stateConfig[i].pop('amplifierGainSelect', 0)
+                self.adcList[column].amplifierList[row].resetIntegrator = stateConfig[i].pop('integratorReset', 0)
+                self.adcList[column].amplifierList[row].connectISRCEXT = stateConfig[i].pop('connectISRCEXT', 0)
+                self.adcList[column].amplifierList[row].enableSWCapClock = stateConfig[i].pop('enableSWCapClock', 0)
+                self.adcList[column].amplifierList[row].enableTriangleWave = stateConfig[i].pop('enableTriangleWave', 0)
+                self.adcList[column].idcOffset = stateConfig[i].pop('IDCOffset', 0) # TODO This is being overwritten over and over again but until we implement all 25 channels
+                self.ui.comboBox_columnSelect.setCurrentIndex(self.columnSelect)
+                self.updateIDCLabels()
 
     def updateIDCOffset(self, value):
         """Method created to facilitate loading in the DC offset current value in the dictionary style loading"""
@@ -422,20 +411,20 @@ class LoadOldDataWindow(QtGui.QMainWindow):
 
     def pushButton_IDCSetOffset_clicked(self):
         """Updates the DC offset current value so that the current being viewed has no DC component left in it"""
-        self.IDCOffset += self.IDCRelative
-        self.ui.label_IDCOffset.setText(str(self.IDCOffset * 1e9))
+        self.adcList[self.columnSelect].idcOffset += self.adcList[self.columnSelect].idcRelative
+        self.ui.label_IDCOffset.setText(str(self.adcList[self.columnSelect].idcOffset * 1e9))
 
     def updateIDCLabels(self):
         """Update labels on the GUI indicating the DC offset current, DC relative current and DC net current"""
-        self.ui.label_IDCOffset.setText(str(round(self.IDCOffset * 1e9, 1)))
-        self.ui.label_IDCRelative.setText(str(round(self.IDCRelative * 1e9, 1)))
-        self.ui.label_IDCNet.setText(str(round((self.IDCOffset + self.IDCRelative) * 1e9, 1)))
+        self.ui.label_IDCOffset.setText(str(round(self.adcList[self.columnSelect].idcOffset * 1e9, 1)))
+        self.ui.label_IDCRelative.setText(str(round(self.adcList[self.columnSelect].idcRelative * 1e9, 1)))
+        self.ui.label_IDCNet.setText(str(round((self.adcList[self.columnSelect].idcOffset + self.adcList[self.columnSelect].idcRelative) * 1e9, 1)))
 
     def updateNoiseLabels(self):
         """Update labels on the GUI indicating the integrated noise values at 100 kHz, 1 MHz and 10 MHz bandwidths"""
-        self.ui.label_100kHzNoise.setText(str(self.RMSNoise_100kHz))
-        self.ui.label_1MHzNoise.setText(str(self.RMSNoise_1MHz))
-        self.ui.label_10MHzNoise.setText(str(self.RMSNoise_10MHz))
+        self.ui.label_100kHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_100kHz))
+        self.ui.label_1MHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_1MHz))
+        self.ui.label_10MHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_10MHz))
 
     def showProgressBar(self, maximum=10):
         """Creates a progress bar"""
@@ -452,17 +441,17 @@ class LoadOldDataWindow(QtGui.QMainWindow):
 
     def lineEdit_RDCFB_editingFinished(self):
         """Reads in the new value of RDCFB from the GUI once it has been edited"""
-        self.oldRDCFB = self.RDCFB
+        oldRDCFB = self.RDCFB
         try:
             self.RDCFB = eval(str(self.ui.lineEdit_RDCFB.text()))*1e6
             if self.RDCFB == 0:
-                self.RDCFB = self.oldRDCFB
+                self.RDCFB = oldRDCFB
         except:
             self.RDCFB = 50*1e6
         self.ui.lineEdit_RDCFB.setText(str(round(self.RDCFB/1e6, 1)))
-        self.RMSNoise_100kHz = numpy.round(self.RMSNoise_100kHz*self.oldRDCFB/self.RDCFB, 1)
-        self.RMSNoise_1MHz = numpy.round(self.RMSNoise_1MHz*self.oldRDCFB/self.RDCFB, 1)
-        self.RMSNoise_10MHz = numpy.round(self.RMSNoise_10MHz*self.oldRDCFB/self.RDCFB, 1)
+        self.adcList[self.columnSelect].rmsNoise_100kHz = numpy.round(self.adcList[self.columnSelect].rmsNoise_100kHz*oldRDCFB/self.RDCFB, 1)
+        self.adcList[self.columnSelect].rmsNoise_1MHz = numpy.round(self.adcList[self.columnSelect].rmsNoise_1MHz*oldRDCFB/self.RDCFB, 1)
+        self.adcList[self.columnSelect].rmsNoise_10MHz = numpy.round(self.adcList[self.columnSelect].rmsNoise_10MHz*oldRDCFB/self.RDCFB, 1)
         self.updateNoiseLabels()
 
     def action_capturePlot_triggered(self):
@@ -503,7 +492,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             self.ui.graphicsView_time.marker.x = 0
             self.ui.graphicsView_time.marker.sigPositionChanged.connect(self.graphicsView_time_updateMarkerText)
             self.ui.graphicsView_time.markerValue = pyqtgraph.TextItem('X=0\nY=0', anchor = (1,0), color='g')
-            self.ui.graphicsView_time.markerValue.setPos(len(self.dataToDisplay)*dictOfConstants['SUBSAMPLINGFACTOR']*1.0/dictOfConstants['ADCSAMPLINGRATE'], numpy.max(self.dataToDisplay))
+            self.ui.graphicsView_time.markerValue.setPos(len(self.adcList[self.columnSelect].yDataToDisplay)*globalConstants.SUBSAMPLINGFACTOR*1.0/globalConstants.ADCSAMPLINGRATE, numpy.max(self.adcList[self.columnSelect].yDataToDisplay))
             self.ui.graphicsView_time.addItem(self.ui.graphicsView_time.marker)
             self.ui.graphicsView_time.addItem(self.ui.graphicsView_time.markerValue)
 
@@ -511,7 +500,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             self.ui.graphicsView_frequency.marker.x = 3
             self.ui.graphicsView_frequency.marker.sigPositionChanged.connect(self.graphicsView_frequency_updateMarkerText)
             self.ui.graphicsView_frequency.markerValue = pyqtgraph.TextItem('X=100\nY=0', anchor = (1,0), color='g')
-            self.ui.graphicsView_frequency.markerValue.setPos(numpy.max(self.f), numpy.max(self.PSD))
+            self.ui.graphicsView_frequency.markerValue.setPos(numpy.max(self.adcList[self.columnSelect].f), numpy.max(self.adcList[self.columnSelect].psd))
             self.ui.graphicsView_frequency.addItem(self.ui.graphicsView_frequency.marker)
             self.ui.graphicsView_frequency.addItem(self.ui.graphicsView_frequency.markerValue)
         else:
@@ -524,7 +513,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         """Updates the labels at the top right of the plot whenever the marker is moved in the time view"""
         self.ui.graphicsView_time.marker.x = float(self.ui.graphicsView_time.marker.value())
         try:
-            self.ui.graphicsView_time.marker.y = self.dataToDisplay[int(self.ui.graphicsView_time.marker.x/dictOfConstants['SUBSAMPLINGFACTOR']*dictOfConstants['ADCSAMPLINGRATE'])]
+            self.ui.graphicsView_time.marker.y = self.adcList[self.columnSelect].yDataToDisplay[int(self.ui.graphicsView_time.marker.x/globalConstants.SUBSAMPLINGFACTOR*globalConstants.ADCSAMPLINGRATE)]
         except:
             self.ui.graphicsView_time.marker.y = 0
         self.ui.graphicsView_time.markerValue.setPlainText('X=' + '%.3E s' % self.ui.graphicsView_time.marker.x + '\nY=%.3E A' % self.ui.graphicsView_time.marker.y)
@@ -535,7 +524,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         """Updates the labels at the top right of the plot whenever the marker is moved in the frequency view"""
         self.ui.graphicsView_frequency.marker.x = 10**float(self.ui.graphicsView_frequency.marker.value())
         try:
-            self.ui.graphicsView_frequency.marker.y = self.RMSNoise[numpy.abs(self.f-self.ui.graphicsView_frequency.marker.x).argmin()]
+            self.ui.graphicsView_frequency.marker.y = self.adcList[self.columnSelect].rmsNoise[numpy.abs(self.adcList[self.columnSelect].f-self.ui.graphicsView_frequency.marker.x).argmin()]
         except:
             self.ui.graphicsView_frequency.marker.y = 0
         self.ui.graphicsView_frequency.markerValue.setPlainText('X=' + '%.3E Hz' % self.ui.graphicsView_frequency.marker.x + u'\n√(∫Y∆X)=%.3E Arms' % self.ui.graphicsView_frequency.marker.y)
@@ -547,7 +536,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         if (self.ui.action_addNoiseFit.isChecked() == True):
             self.ui.graphicsView_frequencyFit_plot = self.ui.graphicsView_frequency.plot(numpy.linspace(100, 10e6, 100), numpy.ones(100), pen='k', width=4)
             if (self.dataInMemory == 1):
-                self.PSDFit = self.PSDWorkerInstance.createFit(self.f, self.PSD, 5e6)
+                self.adcList[self.columnSelect].psdFit = self.PSDWorkerInstance.createFit(self.adcList[self.columnSelect].f, self.adcList[self.columnSelect].psd, 5e6)
                 self.displayData(self.columnSelect)
         else:
             self.ui.graphicsView_frequency.removeItem(self.ui.graphicsView_frequencyFit_plot)

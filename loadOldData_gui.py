@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '.\loadOldData.ui'
+# Form implementation generated from reading ui file './ui/loadOldData.ui'
 #
 # Created by: PyQt4 UI code generator 4.11.4
 #
@@ -271,7 +271,7 @@ class Ui_MainWindow(object):
         self.pushButton_previousEvent.setEnabled(False)
         self.pushButton_previousEvent.setText(_fromUtf8(""))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(_fromUtf8("Icons/icons/arrow-180.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(_fromUtf8("ui/Icons/icons/arrow-180.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.pushButton_previousEvent.setIcon(icon)
         self.pushButton_previousEvent.setObjectName(_fromUtf8("pushButton_previousEvent"))
         self.horizontalLayout.addWidget(self.pushButton_previousEvent)
@@ -295,7 +295,7 @@ class Ui_MainWindow(object):
         self.pushButton_nextEvent.setEnabled(False)
         self.pushButton_nextEvent.setText(_fromUtf8(""))
         icon1 = QtGui.QIcon()
-        icon1.addPixmap(QtGui.QPixmap(_fromUtf8("Icons/icons/arrow.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon1.addPixmap(QtGui.QPixmap(_fromUtf8("ui/Icons/icons/arrow.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.pushButton_nextEvent.setIcon(icon1)
         self.pushButton_nextEvent.setObjectName(_fromUtf8("pushButton_nextEvent"))
         self.horizontalLayout.addWidget(self.pushButton_nextEvent)
@@ -435,7 +435,7 @@ class Ui_MainWindow(object):
         MainWindow.addToolBar(QtCore.Qt.TopToolBarArea, self.toolBar)
         self.action_loadData = QtGui.QAction(MainWindow)
         icon2 = QtGui.QIcon()
-        icon2.addPixmap(QtGui.QPixmap(_fromUtf8("Icons/icons/folder-open.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon2.addPixmap(QtGui.QPixmap(_fromUtf8("ui/Icons/icons/folder-open.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.action_loadData.setIcon(icon2)
         self.action_loadData.setObjectName(_fromUtf8("action_loadData"))
         self.action_options = QtGui.QAction(MainWindow)
@@ -444,19 +444,19 @@ class Ui_MainWindow(object):
         self.action_exit.setObjectName(_fromUtf8("action_exit"))
         self.action_capturePlot = QtGui.QAction(MainWindow)
         icon3 = QtGui.QIcon()
-        icon3.addPixmap(QtGui.QPixmap(_fromUtf8("Icons/icons/document-excel-csv.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon3.addPixmap(QtGui.QPixmap(_fromUtf8("ui/Icons/icons/document-excel-csv.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.action_capturePlot.setIcon(icon3)
         self.action_capturePlot.setObjectName(_fromUtf8("action_capturePlot"))
         self.action_addVerticalMarker = QtGui.QAction(MainWindow)
         self.action_addVerticalMarker.setCheckable(True)
         icon4 = QtGui.QIcon()
-        icon4.addPixmap(QtGui.QPixmap(_fromUtf8("Icons/icons/layer-select-point2.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon4.addPixmap(QtGui.QPixmap(_fromUtf8("ui/Icons/icons/layer-select-point2.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.action_addVerticalMarker.setIcon(icon4)
         self.action_addVerticalMarker.setObjectName(_fromUtf8("action_addVerticalMarker"))
         self.action_addNoiseFit = QtGui.QAction(MainWindow)
         self.action_addNoiseFit.setCheckable(True)
         icon5 = QtGui.QIcon()
-        icon5.addPixmap(QtGui.QPixmap(_fromUtf8("Icons/icons/layer-shape-curve.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon5.addPixmap(QtGui.QPixmap(_fromUtf8("ui/Icons/icons/layer-shape-curve.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.action_addNoiseFit.setIcon(icon5)
         self.action_addNoiseFit.setObjectName(_fromUtf8("action_addNoiseFit"))
         self.action_nextFile = QtGui.QAction(MainWindow)
@@ -467,7 +467,7 @@ class Ui_MainWindow(object):
         self.action_previousFile.setObjectName(_fromUtf8("action_previousFile"))
         self.action_deleteFile = QtGui.QAction(MainWindow)
         icon6 = QtGui.QIcon()
-        icon6.addPixmap(QtGui.QPixmap(_fromUtf8("Icons/icons/cross.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon6.addPixmap(QtGui.QPixmap(_fromUtf8("ui/Icons/icons/cross.png")), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.action_deleteFile.setIcon(icon6)
         self.action_deleteFile.setObjectName(_fromUtf8("action_deleteFile"))
         self.action_exportAllEventsAsCSV = QtGui.QAction(MainWindow)
@@ -571,3 +571,13 @@ class Ui_MainWindow(object):
         self.action_exportAllEventsAsCSV.setText(_translate("MainWindow", "All events as CSV", None))
 
 from pyqtgraph import PlotWidget
+
+if __name__ == "__main__":
+    import sys
+    app = QtGui.QApplication(sys.argv)
+    MainWindow = QtGui.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    sys.exit(app.exec_())
+

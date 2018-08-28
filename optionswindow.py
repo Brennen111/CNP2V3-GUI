@@ -1,16 +1,15 @@
 from PyQt4 import QtCore, QtGui
 from optionsWindow_gui import Ui_Dialog
+import globalConstants
 
 class OptionsWindow(QtGui.QDialogButtonBox):
-    def __init__(self, dictOfConstants):
+    def __init__(self):
         QtGui.QDialogButtonBox.__init__(self)
         self.ui = Ui_Dialog()
         self.ui.setupUi(self)
 
-        self.dictOfConstants = dictOfConstants
-
         #These settings correspond to the general tab of the options window
-        self.PRESETMODE = self.dictOfConstants['PRESETMODE']
+        self.PRESETMODE = globalConstants.PRESETMODE
         self.ui.comboBox_presets.setCurrentIndex(self.PRESETMODE)
 
         self.ui.comboBox_presets.setItemData(0, "Custom preset settings", QtCore.Qt.ToolTipRole)
@@ -18,12 +17,12 @@ class OptionsWindow(QtGui.QDialogButtonBox):
         self.ui.comboBox_presets.setItemData(2, "Reduces accuracy of the PSD plot in lieu of faster data refreshes", QtCore.Qt.ToolTipRole)
         self.ui.comboBox_presets.setItemData(3, "Increases accuracy of the PSD plot while reducing the refresh rate", QtCore.Qt.ToolTipRole)
 
-        self.ADCBITS = self.dictOfConstants['ADCBITS']
-        self.SUBSAMPLINGFACTOR = self.dictOfConstants['SUBSAMPLINGFACTOR']
-        self.REFRESHRATE = self.dictOfConstants['REFRESHRATE']
-        self.ADCSAMPLINGRATE = self.dictOfConstants['ADCSAMPLINGRATE']
-        self.BLOCKLENGTH = self.dictOfConstants['BLOCKLENGTH']
-        self.MBCOMMONMODE = self.dictOfConstants['MBCOMMONMODE']
+        self.ADCBITS = globalConstants.ADCBITS
+        self.SUBSAMPLINGFACTOR = globalConstants.SUBSAMPLINGFACTOR
+        self.REFRESHRATE = globalConstants.REFRESHRATE
+        self.ADCSAMPLINGRATE = globalConstants.ADCSAMPLINGRATE
+        self.BLOCKLENGTH = globalConstants.BLOCKLENGTH
+        self.MBCOMMONMODE = globalConstants.MBCOMMONMODE
 
         self.ui.lineEdit_ADCBITS.setText(str(self.ADCBITS))
         self.ui.lineEdit_SUBSAMPLINGFACTOR.setText(str(self.SUBSAMPLINGFACTOR))
@@ -49,11 +48,11 @@ class OptionsWindow(QtGui.QDialogButtonBox):
         self.ui.comboBox_presets.activated.connect(self.comboBox_presets_activated)
 
         #These settings correspond to the IV tab of the options window
-        self.IVSTARTVOLTAGE = self.dictOfConstants['IVSTARTVOLTAGE']
-        self.IVSTOPVOLTAGE = self.dictOfConstants['IVSTOPVOLTAGE']
-        self.IVVOLTAGESTEP = self.dictOfConstants['IVVOLTAGESTEP']
-        self.IVTIMESTEP = self.dictOfConstants['IVTIMESTEP']
-        self.IVNUMBEROFCYCLES = self.dictOfConstants['IVNUMBEROFCYCLES']
+        self.IVSTARTVOLTAGE = globalConstants.IVSTARTVOLTAGE
+        self.IVSTOPVOLTAGE = globalConstants.IVSTOPVOLTAGE
+        self.IVVOLTAGESTEP = globalConstants.IVVOLTAGESTEP
+        self.IVTIMESTEP = globalConstants.IVTIMESTEP
+        self.IVNUMBEROFCYCLES = globalConstants.IVNUMBEROFCYCLES
 
         self.ui.lineEdit_startVoltage.setText(str(self.IVSTARTVOLTAGE))
         self.ui.lineEdit_stopVoltage.setText(str(self.IVSTOPVOLTAGE))
@@ -74,25 +73,25 @@ class OptionsWindow(QtGui.QDialogButtonBox):
         self.ui.lineEdit_numberOfCycles.editingFinished.connect(self.lineEdit_numberOfCycles_editingFinished)
 
     def accept(self):
-        self.dictOfConstants['ADCBITS'] = self.ADCBITS
-        self.dictOfConstants['SUBSAMPLINGFACTOR'] = self.SUBSAMPLINGFACTOR
-        self.dictOfConstants['REFRESHRATE'] = self.REFRESHRATE
-        self.dictOfConstants['ADCSAMPLINGRATE'] = self.ADCSAMPLINGRATE
-        self.dictOfConstants['BLOCKLENGTH'] = self.BLOCKLENGTH
-        self.dictOfConstants['MBCOMMONMODE'] = self.MBCOMMONMODE
-        self.dictOfConstants['FRAMEDURATION'] = 1000/self.REFRESHRATE
-        self.dictOfConstants['FRAMELENGTH_MASTER'] = (((self.ADCSAMPLINGRATE*self.dictOfConstants['FRAMEDURATION']/1000)*4)/4000000 + 0)*4000000
-        self.dictOfConstants['FRAMELENGTH_SLAVE'] = (int((self.ADCSAMPLINGRATE*self.dictOfConstants['FRAMEDURATION']/1000)*4.0*4/3)/4000000 + 1)*4000000
-        self.dictOfConstants['PRESETMODE'] = self.PRESETMODE
+        globalConstants.ADCBITS = self.ADCBITS
+        globalConstants.SUBSAMPLINGFACTOR = self.SUBSAMPLINGFACTOR
+        globalConstants.REFRESHRATE = self.REFRESHRATE
+        globalConstants.ADCSAMPLINGRATE = self.ADCSAMPLINGRATE
+        globalConstants.BLOCKLENGTH = self.BLOCKLENGTH
+        globalConstants.MBCOMMONMODE = self.MBCOMMONMODE
+        globalConstants.FRAMEDURATION = 1000/self.REFRESHRATE
+        globalConstants.FRAMELENGTH_MASTER = (((self.ADCSAMPLINGRATE*globalConstants.FRAMEDURATION/1000)*4)/4000000 + 0)*4000000
+        globalConstants.FRAMELENGTH_SLAVE = (int((self.ADCSAMPLINGRATE*globalConstants.FRAMEDURATION/1000)*4.0*4/3)/4000000 + 1)*4000000
+        globalConstants.PRESETMODE = self.PRESETMODE
 
         #Make sure start voltage is always smaller than stop voltage
         if self.IVSTARTVOLTAGE > self.IVSTOPVOLTAGE:
             self.IVSTARTVOLTAGE, self.IVSTOPVOLTAGE = self.IVSTOPVOLTAGE, self.IVSTARTVOLTAGE
-        self.dictOfConstants['IVSTARTVOLTAGE'] = self.IVSTARTVOLTAGE
-        self.dictOfConstants['IVSTOPVOLTAGE'] = self.IVSTOPVOLTAGE
-        self.dictOfConstants['IVVOLTAGESTEP'] = self.IVVOLTAGESTEP
-        self.dictOfConstants['IVTIMESTEP'] = self.IVTIMESTEP
-        self.dictOfConstants['IVNUMBEROFCYCLES'] = self.IVNUMBEROFCYCLES
+        globalConstants.IVSTARTVOLTAGE = self.IVSTARTVOLTAGE
+        globalConstants.IVSTOPVOLTAGE = self.IVSTOPVOLTAGE
+        globalConstants.IVVOLTAGESTEP = self.IVVOLTAGESTEP
+        globalConstants.IVTIMESTEP = self.IVTIMESTEP
+        globalConstants.IVNUMBEROFCYCLES = self.IVNUMBEROFCYCLES
         self.close()
 
     def reject(self):

@@ -6,7 +6,8 @@ import numpy
 import random
 
 from plotWindow import Ui_MainWindow
-from optionsWindow import optionsWindow
+from OptionsWindow import optionsWindow
+import globalConstants
 
 class Constants(object):
     def __init__(self, value):
@@ -18,22 +19,22 @@ class Constants(object):
     def setValue(self, value):
         self.__value = value
 
-ADCBITS = Constants(12)
-SUBSAMPLINGFACTOR = Constants(10)
+#ADCBITS = Constants(12)
+#SUBSAMPLINGFACTOR = Constants(10)
 # REFRESHRATE = 10 # in frames per second
-REFRESHRATE = Constants(10)
-AAFILTERGAIN = Constants((51+620)/620*1.8*.51)
+#REFRESHRATE = Constants(10)
+#AAFILTERGAIN = Constants((51+620)/620*1.8*.51)
 # ADCSAMPLINGRATE = 156250000/4 # in samples per second
-ADCSAMPLINGRATE = Constants(4000000)
-FRAMEDURATION = Constants(1000/REFRESHRATE.getValue())
+#ADCSAMPLINGRATE = Constants(4000000)
+#FRAMEDURATION = Constants(1000/REFRESHRATE.getValue())
 # FRAMELENGTH = (((ADCSAMPLINGRATE*FRAMEDURATION/1000)*4)/4000000 + 1)*4000000 # Multiplied by 4 because of the specific FPGA data packing implementation
-FRAMELENGTH = Constants((((ADCSAMPLINGRATE.getValue()*FRAMEDURATION.getValue()/1000)*4)/4000000 + 0)*4000000)
+#FRAMELENGTH = Constants((((ADCSAMPLINGRATE.getValue()*FRAMEDURATION.getValue()/1000)*4)/4000000 + 0)*4000000)
 # BLOCKLENGTH = 1024 # While transferring data from the FPGA, the transaction is broken up into blocks of this length (in bytes)
-BLOCKLENGTH = Constants(256)
-PRESETMODE = Constants(0)
-SQUAREWAVEAMPLITUDE = Constants(0.9)
+#BLOCKLENGTH = Constants(256)
+#PRESETMODE = Constants(0)
+#SQUAREWAVEAMPLITUDE = Constants(0.9)
 
-dictOfConstants = {'ADCBITS':ADCBITS, 'SUBSAMPLINGFACTOR': SUBSAMPLINGFACTOR, 'REFRESHRATE': REFRESHRATE, 'AAFILTERGAIN': AAFILTERGAIN, 'ADCSAMPLINGRATE': ADCSAMPLINGRATE, 'FRAMEDURATION': FRAMEDURATION, 'FRAMELENGTH': FRAMELENGTH, 'BLOCKLENGTH': BLOCKLENGTH, 'SQUAREWAVEAMPLITUDE': SQUAREWAVEAMPLITUDE, 'PRESETMODE': PRESETMODE}
+#dictOfConstants = {'ADCBITS':ADCBITS, 'SUBSAMPLINGFACTOR': SUBSAMPLINGFACTOR, 'REFRESHRATE': REFRESHRATE, 'AAFILTERGAIN': AAFILTERGAIN, 'ADCSAMPLINGRATE': ADCSAMPLINGRATE, 'FRAMEDURATION': FRAMEDURATION, 'FRAMELENGTH': FRAMELENGTH, 'BLOCKLENGTH': BLOCKLENGTH, 'SQUAREWAVEAMPLITUDE': SQUAREWAVEAMPLITUDE, 'PRESETMODE': PRESETMODE}
 
 class PlotWindow(QtGui.QMainWindow):
     def __init__(self, parent=None):
@@ -101,17 +102,17 @@ class PlotWindow(QtGui.QMainWindow):
                 self.ADCData[0::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff)
                 self.ADCData[1::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000) >> 12
                 self.ADCData[2::3] = numpy.bitwise_and(ADCDataCompressed, 0xfff000000) >> 24
-        self.dataToDisplay = (self.ADCData)[0::dictOfConstants['SUBSAMPLINGFACTOR'].getValue()]*1.0
-        self.dataToDisplay[self.dataToDisplay >= 2**(dictOfConstants['ADCBITS'].getValue()-1)] -= 2**(dictOfConstants['ADCBITS'].getValue())
+        self.dataToDisplay = (self.ADCData)[0::globalConstants.SUBSAMPLINGFACTOR]*1.0
+        self.dataToDisplay[self.dataToDisplay >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
         self.dataToDisplay -= numpy.mean(self.dataToDisplay)
-        self.dataToDisplay *= 1.0/2**(dictOfConstants['ADCBITS'].getValue()-1)
-        dictOfConstants['FRAMEDURATION'].setValue(len(self.dataToDisplay)*1.0/dictOfConstants['ADCSAMPLINGRATE'].getValue())
+        self.dataToDisplay *= 1.0/2**(globalConstants.ADCBITS-1)
+        globalConstants.FRAMEDURATION = len(self.dataToDisplay)*1.0/globalConstants.ADCSAMPLINGRATE
         self.displayData()
         
     def displayData(self):
         self.ui.graphicsView_time.clear()
         # print dictOfConstants['FRAMELENGTH'].getValue()
-        self.ui.graphicsView_time.plot(numpy.linspace(0, dictOfConstants['FRAMEDURATION'].getValue()*1.0/1000, len(self.dataToDisplay)), self.dataToDisplay, pen='b')
+        self.ui.graphicsView_time.plot(numpy.linspace(0, globalConstants.FRAMEDURATION*1.0/1000, len(self.dataToDisplay)), self.dataToDisplay, pen='b')
         # self.ui.graphicsView_time.setDownsampling(5, mode='subsample')
         self.ui.graphicsView_time.showGrid(x=True, y=True, alpha=0.7)
         self.ui.graphicsView_time.setLabel(axis='bottom', text='Time (s)')
@@ -119,5 +120,5 @@ class PlotWindow(QtGui.QMainWindow):
         self.ui.graphicsView_time.disableAutoRange()
 
     def action_options_triggered(self):
-        self.optionsWindow0 = optionsWindow(dictOfConstants)
+        self.optionsWindow0 = OptionsWindow()
         self.optionsWindow0.show()
