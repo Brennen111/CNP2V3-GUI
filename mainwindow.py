@@ -2,7 +2,7 @@
 import os
 from PyQt4 import QtCore, QtGui
 import numpy
-import time
+import time, datetime
 # import struct
 import json
 import pyqtgraph, pyqtgraph.exporters
@@ -15,6 +15,8 @@ from optionswindow import OptionsWindow
 from compressdata import CompressData
 from loadolddata import LoadOldDataWindow
 import workerobjects
+
+QWIDGETSIZE_MAX = ((1<<24)-1) # Windows PyQt4 comments out the definition for this in QtGui and QWidget so it cannot be resolved. Including it myself here
 
 # pyqtgraph.setConfigOptions(useWeave = False) #To remove gcc related error
 pyqtgraph.setConfigOption('background', 'w') #Set background to white
@@ -162,7 +164,6 @@ class MainWindow(QtGui.QMainWindow):
         # Default initializations
         #######################################################################
         self.createFPGAObjects()
-        self.frameCounter = 0
         # self.ADC0ModeConfig = 0
         # self.ADC1ModeConfig = 0
         # self.ADC3ModeConfig = 0
@@ -249,7 +250,7 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_enableSquareWave.clicked.connect(self.checkBox_enableSquareWave_clicked)
         self.ui.checkBox_enableSwitchedCapClock.clicked.connect(self.checkBox_enableSwitchedCapClock_clicked)
         self.ui.action_enableIV.triggered.connect(self.action_enableIV_triggered)
-
+        self.ui.action_enableLogging.triggered.connect(self.action_enableLogging_triggered)
         self.ui.lineEdit_livePreviewFilterBandwidth.editingFinished.connect(self.lineEdit_livePreviewFilterBandwidth_editingFinished)
 
         # self.ui.label_poreResistance.mouseReleaseEvent = self.label_poreResistance_clicked()
@@ -513,16 +514,16 @@ class MainWindow(QtGui.QMainWindow):
         """Checks the status of both FPGAs. Also sets the text and icon on the GUI to reflect the configuration status of the corresponding FPGA"""
         if self.FPGAMasterInstance.configured:
             # self.ui.label_FPGAMasterStatus_text.setText('Active')
-            self.ui.label_FPGAMasterStatus_icon.setPixmap(QtGui.QPixmap('./Icons/icons/status.png'))
+            self.ui.label_FPGAMasterStatus_icon.setPixmap(QtGui.QPixmap('./ui/Icons/icons/status.png'))
         else:
             # self.ui.label_FPGAMasterStatus_text.setText('Inactive')
-            self.ui.label_FPGAMasterStatus_icon.setPixmap(QtGui.QPixmap('./Icons/icons/status-busy.png'))
+            self.ui.label_FPGAMasterStatus_icon.setPixmap(QtGui.QPixmap('./ui/Icons/icons/status-busy.png'))
         if self.FPGASlaveInstance.configured:
             # self.ui.label_FPGASlaveStatus_text.setText('Active')
-            self.ui.label_FPGASlaveStatus_icon.setPixmap(QtGui.QPixmap('./Icons/icons/status.png'))
+            self.ui.label_FPGASlaveStatus_icon.setPixmap(QtGui.QPixmap('./ui/Icons/icons/status.png'))
         else:
             # self.ui.label_FPGASlaveStatus_text.setText('Inactive')
-            self.ui.label_FPGASlaveStatus_icon.setPixmap(QtGui.QPixmap('./Icons/icons/status-busy.png'))
+            self.ui.label_FPGASlaveStatus_icon.setPixmap(QtGui.QPixmap('./ui/Icons/icons/status-busy.png'))
 
     def createThreads(self):
         #######################################################################
@@ -537,71 +538,76 @@ class MainWindow(QtGui.QMainWindow):
         self.PSDWorkerInstance.finished.connect(self.updateNoiseLabels)
         self.PSDThread.started.connect(self.PSDWorkerInstance.calculatePSD)
 
-        self.processRawDataADC0Thread = QtCore.QThread()
-        self.processRawDataADC0WorkerInstance = workerobjects.ProcessRawDataWorker(self, 0)
-        self.processRawDataADC0WorkerInstance.moveToThread(self.processRawDataADC0Thread)
-        self.processRawDataADC0WorkerInstance.finished.connect(self.processRawDataADC0Thread.quit)
-        self.processRawDataADC0WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
-        self.processRawDataADC0WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
-        self.processRawDataADC0WorkerInstance.startPSDThread.connect(self.PSDThread.start)
-        self.processRawDataADC0Thread.started.connect(self.processRawDataADC0WorkerInstance.processRawData)
+        self.processRawDataADCMasterThread = QtCore.QThread()
+        self.processRawDataADCMasterWorkerInstance = workerobjects.ProcessRawDataWorker(self, 0)
+        self.processRawDataADCMasterWorkerInstance.moveToThread(self.processRawDataADCMasterThread)
+        self.processRawDataADCMasterWorkerInstance.finished.connect(self.processRawDataADCMasterThread.quit)
+        self.processRawDataADCMasterWorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
+        self.processRawDataADCMasterWorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
+        self.processRawDataADCMasterWorkerInstance.startPSDThread.connect(self.PSDThread.start)
+        self.processRawDataADC0Thread.started.connect(self.processRawDataADCMasterWorkerInstance.processRawData)
 
-        self.processRawDataADC1Thread = QtCore.QThread()
-        self.processRawDataADC1WorkerInstance = workerobjects.ProcessRawDataWorker(self, 1)
-        self.processRawDataADC1WorkerInstance.moveToThread(self.processRawDataADC1Thread)
-        self.processRawDataADC1WorkerInstance.finished.connect(self.processRawDataADC1Thread.quit)
-        self.processRawDataADC1WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
+        self.processRawDataADCSlaveThread = QtCore.QThread()
+        self.processRawDataADCSlaveWorkerInstance = workerobjects.ProcessRawDataWorker(self, 1)
+        self.processRawDataADCSlaveWorkerInstance.moveToThread(self.processRawDataADCSlaveThread)
+        self.processRawDataADCSlaveWorkerInstance.finished.connect(self.processRawDataADCSlaveThread.quit)
+        self.processRawDataADCSlaveWorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADC1WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
-        self.processRawDataADC1WorkerInstance.startPSDThread.connect(self.PSDThread.start)
-        self.processRawDataADC1Thread.started.connect(self.processRawDataADC1WorkerInstance.processRawData)
+        self.processRawDataADCSlaveWorkerInstance.startPSDThread.connect(self.PSDThread.start)
+        self.processRawDataADCSlaveWorkerInstance.started.connect(self.processRawDataADCSlaveWorkerInstance.processRawData)
 
-        self.processRawDataADC2Thread = QtCore.QThread()
-        self.processRawDataADC2WorkerInstance = workerobjects.ProcessRawDataWorker(self, 2)
-        self.processRawDataADC2WorkerInstance.moveToThread(self.processRawDataADC2Thread)
-        self.processRawDataADC2WorkerInstance.finished.connect(self.processRawDataADC2Thread.quit)
-        self.processRawDataADC2WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
-        self.processRawDataADC2WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
-        self.processRawDataADC2WorkerInstance.startPSDThread.connect(self.PSDThread.start)
-        self.processRawDataADC2Thread.started.connect(self.processRawDataADC2WorkerInstance.processRawData)
-
-        self.processRawDataADC3Thread = QtCore.QThread()
-        self.processRawDataADC3WorkerInstance = workerobjects.ProcessRawDataWorker(self, 3)
-        self.processRawDataADC3WorkerInstance.moveToThread(self.processRawDataADC3Thread)
-        self.processRawDataADC3WorkerInstance.finished.connect(self.processRawDataADC3Thread.quit)
-        self.processRawDataADC3WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
-        self.processRawDataADC3WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
-        self.processRawDataADC3WorkerInstance.startPSDThread.connect(self.PSDThread.start)
-        self.processRawDataADC3Thread.started.connect(self.processRawDataADC3WorkerInstance.processRawData)
-
-        self.processRawDataADC4Thread = QtCore.QThread()
-        self.processRawDataADC4WorkerInstance = workerobjects.ProcessRawDataWorker(self, 4)
-        self.processRawDataADC4WorkerInstance.moveToThread(self.processRawDataADC4Thread)
-        self.processRawDataADC4WorkerInstance.finished.connect(self.processRawDataADC4Thread.quit)
-        self.processRawDataADC4WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
-        self.processRawDataADC4WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
-        self.processRawDataADC4WorkerInstance.startPSDThread.connect(self.PSDThread.start)
-        self.processRawDataADC4Thread.started.connect(self.processRawDataADC4WorkerInstance.processRawData)
+        # self.processRawDataADC2Thread = QtCore.QThread()
+        # self.processRawDataADC2WorkerInstance = workerobjects.ProcessRawDataWorker(self, 2)
+        # self.processRawDataADC2WorkerInstance.moveToThread(self.processRawDataADC2Thread)
+        # self.processRawDataADC2WorkerInstance.finished.connect(self.processRawDataADC2Thread.quit)
+        # self.processRawDataADC2WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
+        # self.processRawDataADC2WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
+        # self.processRawDataADC2WorkerInstance.startPSDThread.connect(self.PSDThread.start)
+        # self.processRawDataADC2Thread.started.connect(self.processRawDataADC2WorkerInstance.processRawData)
+        #
+        # self.processRawDataADC3Thread = QtCore.QThread()
+        # self.processRawDataADC3WorkerInstance = workerobjects.ProcessRawDataWorker(self, 3)
+        # self.processRawDataADC3WorkerInstance.moveToThread(self.processRawDataADC3Thread)
+        # self.processRawDataADC3WorkerInstance.finished.connect(self.processRawDataADC3Thread.quit)
+        # self.processRawDataADC3WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
+        # self.processRawDataADC3WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
+        # self.processRawDataADC3WorkerInstance.startPSDThread.connect(self.PSDThread.start)
+        # self.processRawDataADC3Thread.started.connect(self.processRawDataADC3WorkerInstance.processRawData)
+        #
+        # self.processRawDataADC4Thread = QtCore.QThread()
+        # self.processRawDataADC4WorkerInstance = workerobjects.ProcessRawDataWorker(self, 4)
+        # self.processRawDataADC4WorkerInstance.moveToThread(self.processRawDataADC4Thread)
+        # self.processRawDataADC4WorkerInstance.finished.connect(self.processRawDataADC4Thread.quit)
+        # self.processRawDataADC4WorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
+        # self.processRawDataADC4WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
+        # self.processRawDataADC4WorkerInstance.startPSDThread.connect(self.PSDThread.start)
+        # self.processRawDataADC4Thread.started.connect(self.processRawDataADC4WorkerInstance.processRawData)
 
         self.getDataFromFPGAMasterThread = QtCore.QThread()
         self.getDataFromFPGAMasterWorkerInstance = workerobjects.GetDataFromFPGAWorker(self, self.FPGAMasterInstance)
         self.getDataFromFPGAMasterWorkerInstance.moveToThread(self.getDataFromFPGAMasterThread)
         self.getDataFromFPGAMasterWorkerInstance.finished.connect(self.getDataFromFPGAMasterThread.quit)
-        self.getDataFromFPGAMasterWorkerInstance.dataReady.connect(self.action_enableLogging_triggered)
+        self.getDataFromFPGAMasterWorkerInstance.dataReady.connect(self.kickWriteToFileThreads)
         self.getDataFromFPGAMasterThread.started.connect(self.getDataFromFPGAMasterWorkerInstance.getDataFromFPGA)
 
         self.getDataFromFPGASlaveThread = QtCore.QThread()
         self.getDataFromFPGASlaveWorkerInstance = workerobjects.GetDataFromFPGAWorker(self, self.FPGASlaveInstance)
         self.getDataFromFPGASlaveWorkerInstance.moveToThread(self.getDataFromFPGASlaveThread)
         self.getDataFromFPGASlaveWorkerInstance.finished.connect(self.getDataFromFPGASlaveThread.quit)
-        self.getDataFromFPGASlaveWorkerInstance.dataReady.connect(self.action_enableLogging_triggered)
+        self.getDataFromFPGASlaveWorkerInstance.dataReady.connect(self.kickWriteToFileThreads)
         self.getDataFromFPGASlaveThread.started.connect(self.getDataFromFPGASlaveWorkerInstance.getDataFromFPGA)
 
-        self.writeToLogFileThread = QtCore.QThread()
-        self.writeToLogFileWorkerInstance = workerobjects.WriteToLogFileWorker(self)
-        self.writeToLogFileWorkerInstance.moveToThread(self.writeToLogFileThread)
-        self.writeToLogFileWorkerInstance.finished.connect(self.writeToLogFileThread.quit)
-        # self.writeToLogFileWorkerInstance.finished.connect(self.action_enableLogging_triggered)
-        self.writeToLogFileThread.started.connect(self.writeToLogFileWorkerInstance.writeToLogFile)
+        self.writeToMasterLogFileThread = QtCore.QThread()
+        self.writeToMasterLogFileWorkerInstance = workerobjects.WriteToLogFileWorker(self, self.FPGAMasterInstance)
+        self.writeToMasterLogFileWorkerInstance.moveToThread(self.writeToMasterLogFileThread)
+        self.writeToMasterLogFileWorkerInstance.finished.connect(self.writeToMasterLogFileThread.quit)
+        self.writeToMasterLogFileThread.started.connect(self.writeToMasterLogFileWorkerInstance.writeToLogFile)
+
+        self.writeToSlaveLogFileThread = QtCore.QThread()
+        self.writeToSlaveLogFileWorkerInstance = workerobjects.WriteToLogFileWorker(self, self.FPGASlaveInstance)
+        self.writeToSlaveLogFileWorkerInstance.moveToThread(self.writeToSlaveLogFileThread)
+        self.writeToSlaveLogFileWorkerInstance.finished.connect(self.writeToSlaveLogFileThread.quit)
+        self.writeToSlaveLogFileThread.started.connect(self.writeToSlaveLogFileWorkerInstance.writeToLogFile)
 
         self.getDataFromFPGAMasterThread.start(5)
         self.getDataFromFPGASlaveThread.start(5)
@@ -633,16 +639,12 @@ class MainWindow(QtGui.QMainWindow):
         self.processRawDataADC0Thread.wait()
         self.processRawDataADC1Thread.quit()
         self.processRawDataADC1Thread.wait()
-        self.processRawDataADC2Thread.quit()
-        self.processRawDataADC2Thread.wait()
-        self.processRawDataADC3Thread.quit()
-        self.processRawDataADC3Thread.wait()
-        self.processRawDataADC4Thread.quit()
-        self.processRawDataADC4Thread.wait()
         self.PSDThread.quit()
         self.PSDThread.wait()
-        self.writeToLogFileThread.quit()
-        self.writeToLogFileThread.wait()
+        self.writeToMasterLogFileThread.quit()
+        self.writeToMasterLogFileThread.wait()
+        self.writeToSlaveLogFileThread.quit()
+        self.writeToSlaveLogFileThread.wait()
         event.accept()
 
     def action_programFPGAs_triggered(self):
@@ -849,7 +851,7 @@ class MainWindow(QtGui.QMainWindow):
     def checkBox_rowPlotDataDisplay_clicked(self):
         #DO NOT TOUCH THESE FUNCTIONS! SUPER UNSTABLE! GOOD LUCK!
         #centralWidgetWidth = self.ui.centralwidget.width() # Saves a pre-adjustment width size
-        self.setMaximumWidth(QtGui.QWIDGETSIZE_MAX) # Allows the GUI to expand in all directions
+        self.setMaximumWidth(QWIDGETSIZE_MAX) # Allows the GUI to expand in all directions
         self.setMinimumWidth(0)
 
         if (self.ui.checkBox_rowPlotDataDisplay.isChecked()):
@@ -875,7 +877,7 @@ class MainWindow(QtGui.QMainWindow):
     def checkBox_rowPlotPlotsDisplay_clicked(self):
         #DO NOT TOUCH THESE FUNCTIONS! SUPER UNSTABLE! GOOD LUCK!
         #centralWidgetWidth = self.ui.centralwidget.width()
-        self.setMaximumWidth(QtGui.QWIDGETSIZE_MAX) # Allows the GUI to expand in all directions
+        self.setMaximumWidth(QWIDGETSIZE_MAX) # Allows the GUI to expand in all directions
         self.setMinimumWidth(0)
 
         if (self.ui.checkBox_rowPlotPlotsDisplay.isChecked()):
@@ -987,15 +989,15 @@ class MainWindow(QtGui.QMainWindow):
         shiftFactor = self.columnSelect*5  # Shift config bits by 5x depending on the xth column selected
         amplifierGain = self.amplifierGainMask[self.columnSelect] & ((self.amplifierGainOptions[self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex]) << shiftFactor)
 
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode,self.connectElectrodeMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.integratorResetMask[self.rowSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.enableSwitchedCapClockMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
-        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to update bias', 0x01, self.biasEnableMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to update electrode status', 0x01, self.connectElectrodeMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode,self.connectElectrodeMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to update gain', 0x01, amplifierGain, self.amplifierGainMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to update integrator reset', 0x01, self.integratorResetMask[self.rowSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to update ISRCEXT status', 0x01, self.connectISRCEXTMask[self.columnSelect]*self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to update switched cap clock status', 0x02, self.enableSwitchedCapClockMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): Failed to update triangle wave status', 0x00, self.enableTriangleWaveMask*self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): Failed to push wire updates'])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): Failed to trigger wire', 0x41, 1])
 
         # Update settings with programmed settings
         self.ui.comboBox_amplifierGainSelect.blockSignals(True)
@@ -1021,20 +1023,6 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_enableTriangleWave.blockSignals(False)
         self.ui.checkBox_integratorReset.blockSignals(False)
         self.ui.checkBox_connectISRCEXT.blockSignals(False)
-
-        # Need to try because signal may not be connected at start of program
-        try:
-            self.getDataFromFPGAMasterWorkerInstance.dataReady.disconnect(self.action_enableLogging_triggered)
-        except:
-            pass
-        try:
-            self.getDataFromFPGASlaveWorkerInstance.dataReady.disconnect(self.action_enableLogging_triggered)
-        except:
-            pass
-        if (self.columnSelect in self.FPGAMasterInstance.validColumns):
-            self.getDataFromFPGAMasterWorkerInstance.dataReady.connect(self.action_enableLogging_triggered)
-        elif (self.columnSelect in self.FPGASlaveInstance.validColumns):
-            self.getDataFromFPGASlaveWorkerInstance.dataReady.connect(self.action_enableLogging_triggered)
 
     def comboBox_amplifierGainSelect_activated(self, index):
         """Sets the amplifier gain (by setting the feedback capacitor) for the selected amplifier"""
@@ -1111,23 +1099,47 @@ class MainWindow(QtGui.QMainWindow):
                 self.getDataFromFPGASlaveThread.start()
 
     def action_enableLogging_triggered(self):
+        if (self.ui.action_enableLogging.isChecked()):
+            newFilePrefix = str(int(float(self.ui.lineEdit_counterelectrodePotential.text()))) + "mV_" + datetime.date.today().strftime("%Y%m%d") + "_" + time.strftime("%H%M%S")
+            self.writeToMasterLogFileWorkerInstance.setFileName(newFilePrefix)
+            self.writeToSlaveLogFileWorkerInstance.setFileName(newFilePrefix)
+            self.writeToMasterLogFileWorkerInstance.logging = True
+            self.writeToSlaveLogFileWorkerInstance.logging = True
+
+    def kickWriteToFileThreads(self, fpgaType):
         """This method is used to check if log data is enabled and when it should be disabled. Depending on the log duration, this method counts the time that has elapsed since logging was enabled and then disables logging automatically"""
         try:
             logDuration = int(float(self.ui.lineEdit_logDuration.text())*1000)
         except:
             logDuration = 1000
-        if (self.ui.action_enableLogging.isChecked()):
-            self.frameCounter += 1
-            if (self.writeToLogFileWorkerInstance.rawData.qsize() >= globalConstants.REFRESHRATE): # qsize returns approximate number of items in queue
-                self.writeToLogFileThread.start() # Write data to disk as soon as there is 1 second's worth to be written
-            if (self.frameCounter == globalConstants.REFRESHRATE * logDuration / 1000):
-                self.ui.action_enableLogging.toggle()
-                self.frameCounter = 0
-        else:
-            self.frameCounter = 0
-            # Write any leftover data in memory to disk
-            if (self.writeToLogFileWorkerInstance.rawData.qsize() > 0 and not self.writeToLogFileThread.isRunning()):
-                self.writeToLogFileThread.start()
+        if ('Master' == fpgaType):
+            if (True == self.writeToMasterLogFileWorkerInstance.logging):
+                self.writeToMasterLogFileWorkerInstance.frameCounter += 1
+                if (self.writeToMasterLogFileWorkerInstance.rawData.qsize() >= globalConstants.REFRESHRATE): # qsize returns approximate number of items in queue
+                    self.writeToMasterLogFileThread.start() # Write data to disk as soon as there is 1 second's worth to be written
+                if (self.writeToMasterLogFileWorkerInstance.frameCounter == globalConstants.REFRESHRATE * logDuration / 1000):
+                    self.writeToMasterLogFileWorkerInstance.frameCounter = 0
+                    self.writeToMasterLogFileWorkerInstance.logging = False
+                    if ((False == self.writeToMasterLogFileWorkerInstance.logging) and (False == self.writeToSlaveLogFileWorkerInstance.logging)):
+                        self.ui.action_enableLogging.setChecked(False)
+            else:
+                # Write any leftover data in memory to disk
+                if (self.writeToMasterLogFileWorkerInstance.rawData.qsize() > 0 and not self.writeToMasterLogFileThread.isRunning()):
+                    self.writeToMasterLogFileThread.start()
+        elif ('Slave' == fpgaType):
+            if (True == self.writeToSlaveLogFileWorkerInstance.logging):
+                self.writeToSlaveLogFileWorkerInstance.frameCounter += 1
+                if (self.writeToSlaveLogFileWorkerInstance.rawData.qsize() >= globalConstants.REFRESHRATE): # qsize returns approximate number of items in queue
+                    self.writeToSlaveLogFileThread.start() # Write data to disk as soon as there is 1 second's worth to be written
+                if (self.writeToSlaveLogFileWorkerInstance.frameCounter == globalConstants.REFRESHRATE * logDuration / 1000):
+                    self.writeToSlaveLogFileWorkerInstance.frameCounter = 0
+                    self.writeToSlaveLogFileWorkerInstance.logging = False
+                    if ((False == self.writeToMasterLogFileWorkerInstance.logging) and (False == self.writeToSlaveLogFileWorkerInstance.logging)):
+                        self.ui.action_enableLogging.setChecked(False)
+            else:
+                # Write any leftover data in memory to disk
+                if (self.writeToSlaveLogFileWorkerInstance.rawData.qsize() > 0 and not self.writeToSlaveLogFileThread.isRunning()):
+                    self.writeToSlaveLogFileThread.start()
 
     def displayLivePreviewSingleChannelPlot(self, column):
         """This method plots self.dataToDisplay from the worker thread that gets data from the FPGA and processes it. The data being displayed is already a subsampled version of the full data. PyQtGraph then displays the data in the GUI."""
@@ -1246,7 +1258,7 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.label_IDCRelative.setText(str(round(self.adcList[self.columnSelect].idcRelative * 1e9, 1)))
         self.ui.label_IDCNet.setText(str(round((self.adcList[self.columnSelect].idcOffset + self.adcList[self.columnSelect].idcRelative) * 1e9, 1)))
 
-        if(hasattr(self.ui, 'verticalWidget_rowPlotData') and self.ui.checkBox_rowPlotDataDisplay.isChecked() == True):
+        if (hasattr(self.ui, 'verticalWidget_rowPlotData') and self.ui.checkBox_rowPlotDataDisplay.isChecked() == True):
             for column in xrange(5):
                 self.ui.label_rowPlotIDCOffsetArray[column].setText(str(round(self.adcList[column].idcOffset * 1e9, 1)))
                 self.ui.label_rowPlotIDCRelativeArray[column].setText(str(round(self.adcList[column].idcRelative * 1e9, 1)))
@@ -1258,7 +1270,7 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.label_1MHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_1MHz))
         self.ui.label_10MHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_10MHz))
 
-        if(hasattr(self.ui, 'verticalWidget_rowPlotData') and self.ui.checkBox_rowPlotDataDisplay.isChecked() == True):
+        if (hasattr(self.ui, 'verticalWidget_rowPlotData') and self.ui.checkBox_rowPlotDataDisplay.isChecked() == True):
             for column in xrange(5):
                 self.ui.label_rowPlot100kHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_100kHz))
                 self.ui.label_rowPlot1MHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_1MHz))
@@ -1362,11 +1374,11 @@ class MainWindow(QtGui.QMainWindow):
         if (self.livePreviewFilterBandwidth > 10e6):
             self.livePreviewFilterBandwidth = 10e6
         self.ui.lineEdit_livePreviewFilterBandwidth.setText(str(int(self.livePreviewFilterBandwidth/1e3)))
-        self.processRawDataADC0WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
-        self.processRawDataADC1WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
-        self.processRawDataADC2WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
-        self.processRawDataADC3WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
-        self.processRawDataADC4WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
+        self.processRawDataADCMasterWorkerInstance.createFilter(self.livePreviewFilterBandwidth)
+        self.processRawDataADCSlaveWorkerInstance.createFilter(self.livePreviewFilterBandwidth)
+        # self.processRawDataADC2WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
+        # self.processRawDataADC3WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
+        # self.processRawDataADC4WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
 
     def action_saveState_triggered(self, configSaveFileSelected = None): # TODO
         """Saves a variety of options from the GUI into a cfg file for easy loading later on"""

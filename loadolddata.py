@@ -152,6 +152,8 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.analyzeDataThread = QtCore.QThread()
         self.analyzeDataWorkerInstance = workerobjects.AnalyzeDataWorker(self)
         self.analyzeDataWorkerInstance.moveToThread(self.analyzeDataThread)
+        self.analyzeDataWorkerInstance.quit.connect(self.analyzeDataThread.quit)
+        self.analyzeDataWorkerInstance.quit.connect(self.closeProgressBar)
         self.analyzeDataWorkerInstance.finished.connect(self.analyzeDataThread.quit)
         self.analyzeDataWorkerInstance.finished.connect(self.displayAnalysis)
         self.analyzeDataWorkerInstance.finished.connect(self.closeProgressBar)
@@ -189,6 +191,18 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.columnSelect = index
         self.processRawDataWorkerInstance.validColumn = self.columnSelect
         self.PSDWorkerInstance.validColumn = self.columnSelect
+        if ((self.columnSelect in [0,1]) and (True == self.masterDataInMemory)):
+            self.processRawDataWorkerInstance.rawData = self.masterRawData
+        elif ((self.columnSelect in [2,3,4]) and (True == self.slaveDataInMemory)):
+            self.processRawDataWorkerInstance.rawData = self.slaveRawData
+
+        self.removeAnalysis()
+        self.ui.tabWidget_plot.setTabEnabled(3, False)
+        self.ui.lineEdit_currentEvent.setEnabled(False)
+        self.ui.lineEdit_totalEvents.setEnabled(False)
+        self.ui.pushButton_previousEvent.setEnabled(False)
+        self.ui.pushButton_nextEvent.setEnabled(False)
+
         if self.dataInMemory == 1:
             self.showProgressBar(10)
             self.updateProgressBar(0, 'Reading file')
@@ -210,14 +224,13 @@ class LoadOldDataWindow(QtGui.QMainWindow):
     def action_loadData_triggered(self):
         """Loads a previously saved hex file for viewing. Also searches for a similarly named cfg file to load in the experimental parameters"""
         fileSelecter = QtGui.QFileDialog()
-        self.dataLoadFileSelected = fileSelecter.getOpenFileName(self, "Choose file", "./", filter="Hex files (*.hex)", selectedFilter="*.hex")
-        if self.dataLoadFileSelected != '':
-            self.currentHexFileName = str(self.dataLoadFileSelected.split('/')[-1])
-            self.currentDirectoryName = str(self.dataLoadFileSelected[:-len(self.currentHexFileName)])
+        dataLoadFileSelected = fileSelecter.getOpenFileName(self, "Choose file", "./", filter="Hex files (*.hex)", selectedFilter="*.hex")
+        if dataLoadFileSelected != '':
+            self.currentHexFileName = str(dataLoadFileSelected.split('/')[-1])
+            self.currentDirectoryName = str(dataLoadFileSelected[:-len(self.currentHexFileName)])
             self.ui.action_deleteFile.setEnabled(True)
             hexFileList = [os.path.split(x)[1] for x in glob.glob(self.currentDirectoryName + '*.hex')]
             currentHexFileIndex = hexFileList.index(self.currentHexFileName)
-            print currentHexFileIndex
             if (currentHexFileIndex != 0):
                 self.ui.action_previousFile.setEnabled(True)
             else:
@@ -226,32 +239,71 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                 self.ui.action_nextFile.setEnabled(True)
             else:
                 self.ui.action_nextFile.setEnabled(False)
-            self.loadHexData()
+            self.loadHexData(dataLoadFileSelected)
 
-    def loadHexData(self):
+    def loadHexData(self, dataLoadFileSelected = ""):
         self.dataInMemory = 0
-        print self.dataLoadFileSelected
-        if self.dataLoadFileSelected != "":
-            configLoadFileSelected = self.dataLoadFileSelected[0:len(self.dataLoadFileSelected) - 3] + "cfg"
+        self.masterDataInMemory = False
+        self.slaveDataInMemory = False
+        print ' '
+        print dataLoadFileSelected
+        if dataLoadFileSelected != "":
+            f = open(dataLoadFileSelected, 'rb')
+            if ('Master' == dataLoadFileSelected[:-len('.hex')].split('_')[-1]):
+                print "Master hex file selected"
+                configLoadFileSelected = dataLoadFileSelected[0:-len('_Master.hex')] + ".cfg"
+                self.masterRawData = f.read()
+                self.masterDataInMemory = True
+                f.close()
+                self.comboBox_columnSelect_activated(0) # This won't start the rawData thread because the dataInMemory flag is 0
+                try:
+                    f = open(dataLoadFileSelected[:-len('Master.hex')] + 'Slave.hex', 'rb')
+                    self.slaveRawData = f.read()
+                    self.slaveDataInMemory = True
+                    f.close()
+                    print "Corresponding slave hex file found and loaded"
+                except:
+                    self.slaveRawData = self.masterRawData
+                    print "Corresponding slave hex file not found"
+
+            elif('Slave' == dataLoadFileSelected[0:-len('.hex')].split('_')[-1]):
+                print "Slave hex file selected"
+                configLoadFileSelected = dataLoadFileSelected[0:-len('_Slave.hex')] + ".cfg"
+                self.slaveRawData = f.read()
+                self.slaveDataInMemory = True
+                f.close()
+                self.comboBox_columnSelect_activated(2) # This won't start the rawData thread because the dataInMemory flag is 0
+                try:
+                    f = open(dataLoadFileSelected[:-len('Slave.hex')] + 'Master.hex', 'rb')
+                    self.masterRawData = f.read()
+                    f.close()
+                    print "Corresponding master hex file found and loaded"
+                except:
+                    self.masterRawData = self.slaveRawData # Just in case
+                    print "Corresponding master hex file not found"
+
+            else:
+                configLoadFileSelected = dataLoadFileSelected[0:-len('hex')] + "cfg"
+                self.processRawDataWorkerInstance.rawData = f.read()
+                f.close()
+
             try:
-                self.f = open(configLoadFileSelected, 'r')
-                stateConfig = json.load(self.f)
+                f = open(configLoadFileSelected, 'r')
+                stateConfig = json.load(f)
                 self.loadState(stateConfig)
-                self.f.close()
+                f.close()
+                print "Corresponding cfg file found and loaded"
             except:
                 print "Could not find a corresponding cfg file"
-            self.f = open(self.dataLoadFileSelected, 'rb')
-            self.processRawDataWorkerInstance.rawData = self.f.read()
-            # self.processRawDataWorkerInstance.rawData = self.processRawDataWorkerInstance.rawData[0:len(self.processRawDataWorkerInstance.rawData)/10]
-            print len(self.processRawDataWorkerInstance.rawData)
-            windowTitle = self.dataLoadFileSelected.split('/')[-2] + '/' + self.dataLoadFileSelected.split('/')[-1]
+
+            windowTitle = dataLoadFileSelected.split('/')[-2] + '/' + dataLoadFileSelected.split('/')[-1]
             self.setWindowTitle(windowTitle)
             # self.processRawDataWorkerInstance.rawData = self.processRawDataWorkerInstance.rawData[:-1]
-            self.f.close()
+            f.close() # Just in case
             self.dataInMemory = 1
             self.baseline = None
-            # with open(self.dataLoadFileSelected, 'rb') as self.f:
-                # for line in self.f:
+            # with open(dataLoadFileSelected, 'rb') as f:
+                # for line in f:
                     # self.rawData = line
             if (self.processRawDataThread.isRunning()):
                 self.processRawDataThread.quit()
@@ -289,7 +341,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         if previousHexFileIndex != len(hexFileList) - 1:
             self.ui.action_nextFile.setEnabled(True)
         previousHexFileName = hexFileList[previousHexFileIndex]
-        print self.currentDirectoryName + previousHexFileName
+        #print self.currentDirectoryName + previousHexFileName
         self.loadHexData(self.currentDirectoryName + previousHexFileName)
         self.currentHexFileName = previousHexFileName
 
@@ -377,10 +429,10 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             rowSelect = stateConfig[i].pop('rowSelect', None)
             RDCFB = stateConfig[i].pop('RDCFB', None)
 
-            if (None != columnSelect):
-                self.columnSelect = columnSelect
-            if (None != rowSelect):
-                self.rowSelect = rowSelect
+            #if (None != columnSelect):
+                #self.columnSelect = columnSelect
+            #if (None != rowSelect):
+                #self.rowSelect = rowSelect
             if (None != RDCFB):
                 self.RDCFB = RDCFB
                 self.ui.lineEdit_RDCFB.setText(str(round(RDCFB/1e6, 1)))
@@ -401,7 +453,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                 self.adcList[column].amplifierList[row].enableSWCapClock = stateConfig[i].pop('enableSWCapClock', 0)
                 self.adcList[column].amplifierList[row].enableTriangleWave = stateConfig[i].pop('enableTriangleWave', 0)
                 self.adcList[column].idcOffset = stateConfig[i].pop('IDCOffset', 0) # TODO This is being overwritten over and over again but until we implement all 25 channels
-                self.ui.comboBox_columnSelect.setCurrentIndex(self.columnSelect)
+                #self.ui.comboBox_columnSelect.setCurrentIndex(self.columnSelect)
                 self.updateIDCLabels()
 
     def updateIDCOffset(self, value):
@@ -552,8 +604,8 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.ui.pushButton_nextEvent.setEnabled(True)
         self.ui.action_exportAllEventsAsCSV.setEnabled(True)
 
-    def displayAnalysis(self):
-        """Removes results of previous analysis and displays the new results on top of them. This includes creating a new baseline, a threshold line and event begin and end markers for all the detected events."""
+    def removeAnalysis(self):
+        """Removes results of previous analysis"""
         if (hasattr(self.ui.graphicsView_time, 'baseline')):
             self.ui.graphicsView_time.removeItem(self.ui.graphicsView_time.baseline)
         if (hasattr(self.ui.graphicsView_time, 'threshold')):
@@ -562,6 +614,9 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             self.ui.graphicsView_time.removeItem(self.ui.graphicsView_time.eventBeginMarker)
         if (hasattr(self.ui.graphicsView_time, 'eventEndMarker')):
             self.ui.graphicsView_time.removeItem(self.ui.graphicsView_time.eventEndMarker)
+
+    def displayAnalysis(self):
+        self.removeAnalysis() # Remove the previous analysis
 
         # plot = pyqtgraph.plot(self.analyzeF, self.analyzePxx, pen='b')
         # plot.setLogMode(True, True)
@@ -590,7 +645,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         # self.tempPlot.sigPointsClicked.connect(self.tempPlot_sigPointsClicked)
 
         self.ui.lineEdit_totalEvents.setText(str(self.numberOfEvents))
-        print self.numberOfEvents
+        #print self.numberOfEvents
         self.graphicsView_eventViewer_eventChanged(absolute=1)
 
     # def tempPlot_sigPointsClicked(self, item, points):

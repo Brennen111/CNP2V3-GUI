@@ -120,21 +120,23 @@ class PSDWorker(QtCore.QObject):
 class GetDataFromFPGAWorker(QtCore.QObject):
     """Worker module that inherits from QObject. Eventually, this gets moved on to a thread that inherits from QThread."""
     finished = QtCore.pyqtSignal()
-    dataReady = QtCore.pyqtSignal()
+    dataReady = QtCore.pyqtSignal(str)
 
     def __init__(self, parentWindow, FPGAInstance):
         super(GetDataFromFPGAWorker, self).__init__()
         self.parentWindow = parentWindow
         self.FPGAInstance = FPGAInstance
         self.commandQueue = Queue.Queue()
+        self.frameCount = 0
+        self.logging = False
 
         if self.FPGAInstance is not None:
             self.FPGAType = self.FPGAInstance.type
             self.validColumns = self.FPGAInstance.validColumns
-            self.processRawDataThreadOptions = {'Master': [self.parentWindow.processRawDataADC0Thread, self.parentWindow.processRawDataADC1Thread], 'Slave': [self.parentWindow.processRawDataADC2Thread, self.parentWindow.processRawDataADC3Thread, self.parentWindow.processRawDataADC4Thread]}
-            self.processRawDataThreadArray = self.processRawDataThreadOptions[self.FPGAType]
-            self.processRawDataADCWorkerInstanceOptions = {'Master': [self.parentWindow.processRawDataADC0WorkerInstance, self.parentWindow.processRawDataADC1WorkerInstance], 'Slave': [self.parentWindow.processRawDataADC2WorkerInstance, self.parentWindow.processRawDataADC3WorkerInstance, self.parentWindow.processRawDataADC4WorkerInstance]}
-            self.processRawDataADCWorkerInstanceArray = self.processRawDataADCWorkerInstanceOptions[self.FPGAType]
+            self.processRawDataThreadOptions = {'Master': self.parentWindow.processRawDataADC0Thread, 'Slave': self.parentWindow.processRawDataADC1Thread}
+            self.processRawDataThread = self.processRawDataThreadOptions[self.FPGAType]
+            self.processRawDataADCWorkerInstanceOptions = {'Master': self.parentWindow.processRawDataADC0WorkerInstance, 'Slave': self.parentWindow.processRawDataADC1WorkerInstance}
+            self.processRawDataADCWorkerInstance = self.processRawDataADCWorkerInstanceOptions[self.FPGAType]
 
     def getDataFromFPGA(self):
         """Gets data from the FPGA and logs it if the corresponding option has been enabled. Calls processRawData once a chunk of data has been obtained. Loops infinitely."""
@@ -150,6 +152,7 @@ class GetDataFromFPGAWorker(QtCore.QObject):
                 rawData = bytearray(globalConstants.FRAMELENGTH_MASTER)
             elif ('Slave' == self.FPGAType):
                 rawData = bytearray(globalConstants.FRAMELENGTH_SLAVE)
+
             self.start = time.clock()
             errorReturn = self.FPGAInstance.xem.ReadFromBlockPipeOut(0xA0, globalConstants.BLOCKLENGTH, rawData)
             if (self.FPGAInstance.xem.Timeout == errorReturn):
@@ -158,18 +161,19 @@ class GetDataFromFPGAWorker(QtCore.QObject):
                 print "Transaction failed on", self.FPGAType, "FPGA"
                 self.FPGAInstance.powered = False #Change power status to off if code breaks out of the while loop
                 self.FPGAInstance.configured = False #Change configuration status to unconfigured if code breaks out of the while loop
-            if (self.parentWindow.columnSelect in self.validColumns):
-                if (self.parentWindow.ui.action_enableLogging.isChecked()):
-                    self.parentWindow.writeToLogFileWorkerInstance.rawData.put(rawData)
-                    # self.parentWindow.writeToLogFileThread.start()
-            self.dataReady.emit()
 
-            for i in xrange(len(self.processRawDataThreadArray)):
-                if not self.processRawDataThreadArray[i].isRunning():
-                    self.processRawDataADCWorkerInstanceArray[i].rawData = rawData
-                    self.processRawDataThreadArray[i].start()
-                else:
-                    pass
+            if ('Master' == self.FPGAType):
+                if (True == self.parentWindow.writeToMasterLogFileWorkerInstance.logging):
+                    self.parentWindow.writeToMasterLogFileWorkerInstance.rawData.put(rawData)
+            elif ('Slave' == self.FPGAType):
+                if (True == self.parentWindow.writeToMasterLogFileWorkerInstance.logging):
+                    self.parentWindow.writeToSlaveLogFileWorkerInstance.rawData.put(rawData)
+
+            self.dataReady.emit(self.FPGAType)
+
+            if not self.processRawDataThread.isRunning():
+                self.processRawDataADCWorkerInstance.rawData = rawData
+                self.processRawDataThread.start()
 
             self.updateWireOuts()
             self.stop = time.clock()
@@ -210,16 +214,16 @@ class ProcessRawDataWorker(QtCore.QObject):
     #Signals for the progress bar
     progress = QtCore.pyqtSignal(int, str)
 
-    def __init__(self, parentWindow, validColumn):
+    def __init__(self, parentWindow, validColumns):
         super(ProcessRawDataWorker, self).__init__()
         self.skipPoints = 0
         self.createFilter(100e3)
         self.parentWindow = parentWindow
-        self.validColumn = validColumn
+        self.validColumns = validColumns
         self.rawDataUnpacked = 0
         self.compressedData = False
 
-    @numba.jit(parallel=True, fastmath=True)
+    @numba.jit
     def numba_scale(self, array, bits=12):
         for i in xrange(len(array)):
             if array[i] >= 2**(bits-1):
@@ -236,105 +240,106 @@ class ProcessRawDataWorker(QtCore.QObject):
 
     def processRawData(self):
         """Processes the raw data. The raw data is a 32 bit number that contains {8'h00, 12'hADC1Data, 12'hADC0DATA}. This method unpacks the data and then subsamples it and corrects for the boosting and anti-aliasing filter gain and DC offset."""
-        #self.start = time.clock()
-        # self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
-        # ADCData = {0: numpy.bitwise_and(self.rawDataUnpacked, 0xfff),\
-                # 1: (numpy.bitwise_and(self.rawDataUnpacked, 0xfff000))>>12,\
-                # 3: numpy.bitwise_and(self.rawDataUnpacked, 0xfff)}
-        # Switched from dictionary to if else implementation because of timing issues while displaying data
-        if self.compressedData == False:
-            ADCData = self.unpackData().astype(numpy.float32)
-        else:
-            ADCData = numpy.frombuffer(self.rawData, dtype='int16').astype(numpy.float32)
+        for column in self.validColumns:
+            #self.start = time.clock()
+            # self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
+            # ADCData = {0: numpy.bitwise_and(self.rawDataUnpacked, 0xfff),\
+                    # 1: (numpy.bitwise_and(self.rawDataUnpacked, 0xfff000))>>12,\
+                    # 3: numpy.bitwise_and(self.rawDataUnpacked, 0xfff)}
+            # Switched from dictionary to if else implementation because of timing issues while displaying data
+            if self.compressedData == False:
+                ADCData = self.unpackData(column).astype(numpy.float32)
+            else:
+                ADCData = numpy.frombuffer(self.rawData, dtype='int16').astype(numpy.float32)
 
         self.numba_scale(ADCData, globalConstants.ADCBITS)
 
-        if (self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked()):
-            # ADCData2[ADCData2 >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
-            # ADCData2 /= 2**(globalConstants.ADCBITS-1)
-            ADCData = scipy.signal.lfilter(self.b, self.a, ADCData)
+            if (self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked()):
+                # ADCData2[ADCData2 >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
+                # ADCData2 /= 2**(globalConstants.ADCBITS-1)
+                ADCData = scipy.signal.lfilter(self.b, self.a, ADCData)
 
-            #ADCData2[:-1] += numpy.diff(ADCData2)/(2*numpy.pi*2.5e6/globalConstants.ADCSAMPLINGRATE)
+                #ADCData2[:-1] += numpy.diff(ADCData2)/(2*numpy.pi*2.5e6/globalConstants.ADCSAMPLINGRATE)
 
-            # if (self.parentWindow.ui.checkBox_enableWaveletDenoising.isChecked()):
-            #     self.motherWavelet = str(self.parentWindow.ui.lineEdit_motherWavelet.text())
-            #     maxLength = int(2**(numpy.floor(numpy.log2(len(ADCData)))))
-            #     ADCData = ADCData2[:maxLength]
-            #     waveletCoefficients = pywt.swt(ADCData, self.motherWavelet, level=7)# level=int(numpy.floor(numpy.log2(len(ADCData)))))
-            #     waveletCoefficients = map(list, waveletCoefficients)
-            #     for i in range(len(waveletCoefficients)):
-            #         detail = waveletCoefficients[i][1]
-            #         sigma = numpy.median(numpy.abs(detail))/0.6745
-            #         threshold = sigma*numpy.sqrt(2*numpy.log10(len(detail)))/numpy.log10(7 - i + 1)
-            #         self.numba_garrote(waveletCoefficients[i][1], threshold)
-            #     ADCData = pywt.iswt(waveletCoefficients, self.motherWavelet)
-            # totalNoise = numpy.std(ADCData2[len(ADCData2)/2:])
-            # print totalNoise/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN
-            # tags = ADCData < -5*totalNoise
-            # print totalNoise/self.parentWindow.RDCFB, numpy.sum(numpy.bitwise_and(numpy.bitwise_and(tags[:-3], tags[1:-2]), numpy.bitwise_and(tags[2:-1], tags[3:])))
+                # if (self.parentWindow.ui.checkBox_enableWaveletDenoising.isChecked()):
+                #     self.motherWavelet = str(self.parentWindow.ui.lineEdit_motherWavelet.text())
+                #     maxLength = int(2**(numpy.floor(numpy.log2(len(ADCData)))))
+                #     ADCData = ADCData2[:maxLength]
+                #     waveletCoefficients = pywt.swt(ADCData, self.motherWavelet, level=7)# level=int(numpy.floor(numpy.log2(len(ADCData)))))
+                #     waveletCoefficients = map(list, waveletCoefficients)
+                #     for i in range(len(waveletCoefficients)):
+                #         detail = waveletCoefficients[i][1]
+                #         sigma = numpy.median(numpy.abs(detail))/0.6745
+                #         threshold = sigma*numpy.sqrt(2*numpy.log10(len(detail)))/numpy.log10(7 - i + 1)
+                #         self.numba_garrote(waveletCoefficients[i][1], threshold)
+                #     ADCData = pywt.iswt(waveletCoefficients, self.motherWavelet)
+                # totalNoise = numpy.std(ADCData2[len(ADCData2)/2:])
+                # print totalNoise/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN
+                # tags = ADCData < -5*totalNoise
+                # print totalNoise/self.parentWindow.RDCFB, numpy.sum(numpy.bitwise_and(numpy.bitwise_and(tags[:-3], tags[1:-2]), numpy.bitwise_and(tags[2:-1], tags[3:])))
 
-            ADCData = ADCData[self.skipPoints:]
-            dataToDisplay = ADCData[::globalConstants.SUBSAMPLINGFACTOR]
-            if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')): #TODO
-                self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[::self.skipPoints/4]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[self.validColumn].idcOffset
-                self.parentWindow.analyzeDataWorkerInstance.effectiveSamplingRate = globalConstants.ADCSAMPLINGRATE/self.skipPoints*4
+                ADCData = ADCData[self.skipPoints:]
+                dataToDisplay = ADCData[::globalConstants.SUBSAMPLINGFACTOR]
+                if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')): #TODO
+                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[::self.skipPoints/4]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+                    self.parentWindow.analyzeDataWorkerInstance.effectiveSamplingRate = globalConstants.ADCSAMPLINGRATE/self.skipPoints*4
 
-        else:
-            #ADCData[:-1] += numpy.diff(ADCData)/(2*numpy.pi*2.5e6/globalConstants.ADCSAMPLINGRATE)
-            # if (self.parentWindow.ui.checkBox_enableWaveletDenoising.isChecked()):
-            #     self.motherWavelet = str(self.parentWindow.ui.lineEdit_motherWavelet.text())
-            #     level = 8
-            #     maxLength = int(numpy.floor((len(ADCData))/2**level))*2**level
-            #     ADCData = ADCData[:maxLength]
-            #     waveletCoefficients = pywt.swt(ADCData, self.motherWavelet, level=level)# level=int(numpy.floor(numpy.log2(len(ADCData)))))
-            #     print "SWT done"
-            #     waveletCoefficients = map(list, waveletCoefficients)
-            #     print "Conversion to list done"
-            #     for i in range(len(waveletCoefficients)):
-            #         detail = waveletCoefficients[i][1]
-            #         sigma = numpy.median(numpy.abs(detail))/0.6745
-            #         threshold = sigma*numpy.sqrt(2*numpy.log10(len(detail)))/numpy.log10(level - i + 2)
-            #         self.numba_garrote(waveletCoefficients[i][1], threshold)
-            #         print "Level " + str(i+1) + " done"
-            #     print "Beginning ISWT"
-            #     ADCData = pywt.iswt(waveletCoefficients, self.motherWavelet)
-            #     print "ISWT complete"
-            #     if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
-            #         self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[self.validColumn].idcOffset
+            else:
+                #ADCData[:-1] += numpy.diff(ADCData)/(2*numpy.pi*2.5e6/globalConstants.ADCSAMPLINGRATE)
+                # if (self.parentWindow.ui.checkBox_enableWaveletDenoising.isChecked()):
+                #     self.motherWavelet = str(self.parentWindow.ui.lineEdit_motherWavelet.text())
+                #     level = 8
+                #     maxLength = int(numpy.floor((len(ADCData))/2**level))*2**level
+                #     ADCData = ADCData[:maxLength]
+                #     waveletCoefficients = pywt.swt(ADCData, self.motherWavelet, level=level)# level=int(numpy.floor(numpy.log2(len(ADCData)))))
+                #     print "SWT done"
+                #     waveletCoefficients = map(list, waveletCoefficients)
+                #     print "Conversion to list done"
+                #     for i in range(len(waveletCoefficients)):
+                #         detail = waveletCoefficients[i][1]
+                #         sigma = numpy.median(numpy.abs(detail))/0.6745
+                #         threshold = sigma*numpy.sqrt(2*numpy.log10(len(detail)))/numpy.log10(level - i + 2)
+                #         self.numba_garrote(waveletCoefficients[i][1], threshold)
+                #         print "Level " + str(i+1) + " done"
+                #     print "Beginning ISWT"
+                #     ADCData = pywt.iswt(waveletCoefficients, self.motherWavelet)
+                #     print "ISWT complete"
+                #     if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
+                #         self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[self.validColumn].idcOffset
 
-            if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
-                self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[self.validColumn].idcOffset
+                if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
+                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
 
-            dataToDisplay = ADCData[::globalConstants.SUBSAMPLINGFACTOR]
-            # dataToDisplay[dataToDisplay >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
-            # dataToDisplay /= 2**(globalConstants.ADCBITS-1)
-            # self.numba_scale(dataToDisplay, globalConstants.ADCBITS)
+                dataToDisplay = ADCData[::globalConstants.SUBSAMPLINGFACTOR]
+                # dataToDisplay[dataToDisplay >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
+                # dataToDisplay /= 2**(globalConstants.ADCBITS-1)
+                # self.numba_scale(dataToDisplay, globalConstants.ADCBITS)
 
-        dataToDisplay *= 1.0/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN #Prefixes (like nano or pico) are handled automatically by PyQtGraph
-        self.parentWindow.adcList[self.validColumn].idcRelative = numpy.mean(dataToDisplay) - self.parentWindow.adcList[self.validColumn].idcOffset
-        dataToDisplay -= self.parentWindow.adcList[self.validColumn].idcOffset
-        self.parentWindow.updateIDCLabels()
-        self.progress.emit(1, 'Finished calculating data to display')
+            dataToDisplay *= 1.0/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN #Prefixes (like nano or pico) are handled automatically by PyQtGraph
+            self.parentWindow.adcList[column].idcRelative = numpy.mean(dataToDisplay) - self.parentWindow.adcList[column].idcOffset
+            dataToDisplay -= self.parentWindow.adcList[column].idcOffset
+            self.parentWindow.updateIDCLabels()
+            self.progress.emit(1, 'Finished calculating data to display')
 
-        self.parentWindow.adcList[self.validColumn].adcData = ADCData
+            self.parentWindow.adcList[column].adcData = ADCData
 
-        if (hasattr(self.parentWindow.ui, 'action_enableLivePreview') and self.parentWindow.ui.action_enableLivePreview.isChecked() == False):
-            pass
-        else:
-            if (self.parentWindow.columnSelect == self.validColumn):
-                self.parentWindow.dataToDisplay = dataToDisplay
-            self.parentWindow.adcList[self.validColumn].yDataToDisplay = dataToDisplay
-            self.parentWindow.adcList[self.validColumn].xDataToDisplay = numpy.linspace(0, len(dataToDisplay) * globalConstants.SUBSAMPLINGFACTOR * 1.0 / globalConstants.ADCSAMPLINGRATE, len(dataToDisplay))
+            if (hasattr(self.parentWindow.ui, 'action_enableLivePreview') and self.parentWindow.ui.action_enableLivePreview.isChecked() == False):
+                pass
+            else:
+                if (self.parentWindow.columnSelect == column):
+                    self.parentWindow.dataToDisplay = dataToDisplay
+                self.parentWindow.adcList[column].yDataToDisplay = dataToDisplay
+                self.parentWindow.adcList[column].xDataToDisplay = numpy.linspace(0, len(dataToDisplay) * globalConstants.SUBSAMPLINGFACTOR * 1.0 / globalConstants.ADCSAMPLINGRATE, len(dataToDisplay))
 
-        if (not self.parentWindow.PSDThread.isRunning()):
-            self.parentWindow.PSDWorkerInstance.ADCData = ADCData #ADCData is sent as float32
-            self.parentWindow.PSDWorkerInstance.validColumn = self.validColumn
-            self.startPSDThread.emit()
-            self.progress.emit(1, 'Calculating histogram')
+            if (not self.parentWindow.PSDThread.isRunning()):
+                self.parentWindow.PSDWorkerInstance.ADCData = ADCData #ADCData is sent as float32
+                self.parentWindow.PSDWorkerInstance.validColumn = column
+                self.startPSDThread.emit()
+                self.progress.emit(1, 'Calculating histogram')
 
-        self.stop = time.clock()
-        # print "Processing the data took", self.stop-self.start, "s"
-        self.dataReady.emit(self.validColumn)
+            self.stop = time.clock()
+            # print "Processing the data took", self.stop-self.start, "s"
+            self.dataReady.emit(column)
         self.finished.emit()
 
     def createFilter(self, livePreviewFilterBandwidth):
@@ -348,7 +353,8 @@ class ProcessRawDataWorker(QtCore.QObject):
     def compressData(self):
         return self.unpackData().astype(numpy.int16)
 
-    @numba.jit
+    #@numba.jit    
+    @numba.jit('uint32[:](pyobject, uint32[:], uint32, uint64, uint8[:])')
     def numba_bitwise_and(self, array, mask, shift, resulttype='uint32'):
         """Numba implementation of AND function with masking and shifting ability"""
         result = numpy.empty_like(array, dtype=resulttype)
@@ -356,21 +362,21 @@ class ProcessRawDataWorker(QtCore.QObject):
             result[i] = numpy.bitwise_and(array[i], mask) >> shift
         return result
 
-    def unpackData(self):
+    def unpackData(self, column):
         """Returns unpacked ADCData for the selected column"""
         self.progress.emit(1, 'Unpacking data')
 
-        if (0 == self.validColumn):
+        if (0 == column):
             self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
             #ADCData = numpy.empty_like(self.rawDataUnpacked, dtype='uint32')
             ADCData = self.numba_bitwise_and(self.rawDataUnpacked, numpy.uint32(0xfff), 0)
 
-        elif (1 == self.validColumn):
+        elif (1 == column):
             self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
             #ADCData = numpy.empty_like(self.rawDataUnpacked, dtype='uint32')
             ADCData = self.numba_bitwise_and(self.rawDataUnpacked, numpy.uint32(0xfff000), 12)
 
-        elif (2 == self.validColumn):
+        elif (2 == column):
             self.rawData64Bit = numpy.frombuffer(self.rawData, dtype='uint64')
             ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[0::2], numpy.uint64(0xfffffffff), 0, 'uint64')
             ADCData = numpy.empty((3 * numpy.size(ADCDataCompressed),), dtype='uint32')
@@ -378,7 +384,7 @@ class ProcessRawDataWorker(QtCore.QObject):
             ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12) # Can this be done in 1 for loop to avoid traversing data 3x?
             ADCData[2::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000000), 24) # Can this be done in 1 for loop to avoid traversing data 3x?
 
-        elif (3 == self.validColumn):
+        elif (3 == column):
             self.rawData64Bit = numpy.frombuffer(self.rawData, dtype='uint64')
             ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[0::2], numpy.uint64(0xfffffff000000000), 36, 'uint64')
             ADCDataCompressedMSB = self.numba_bitwise_and(self.rawData64Bit[1::2], numpy.uint64(0xff), 0, 'uint64')
@@ -387,7 +393,7 @@ class ProcessRawDataWorker(QtCore.QObject):
             ADCData[1::3] = self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xfff000), 12)
             ADCData[2::3] = (self.numba_bitwise_and(ADCDataCompressed, numpy.uint64(0xf000000), 24)) + (ADCDataCompressedMSB * 16)
 
-        elif (4 == self.validColumn):
+        elif (4 == column):
             self.rawData64Bit = numpy.frombuffer(self.rawData, dtype='uint64')
             ADCDataCompressed = self.numba_bitwise_and(self.rawData64Bit[1::2], numpy.uint64(0x00000fffffffff00), 8, 'uint64')
             ADCData = numpy.empty((3 * numpy.size(ADCDataCompressed),), dtype='uint32')
@@ -404,39 +410,51 @@ class ProcessRawDataWorker(QtCore.QObject):
 class WriteToLogFileWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal()
 
-    def __init__(self, parentWindow):
+    def __init__(self, parentWindow, fpgaInstance):
         super(WriteToLogFileWorker, self).__init__()
         self.rawData = Queue.Queue()
         self.f = 0
         self.parentWindow = parentWindow
+        self.fpgaType = fpgaInstance.type
+        self.frameCounter = 0
+        self.logging = False
         self.defaultDirectory = "./Logfiles" + "/" + datetime.date.today().strftime("%Y%m%d") + "/"
+        self.filePrefix = "default"
+        self.fileName = self.defaultDirectory + "_" + self.filePrefix + '_' + self.fpgaType + ".hex"
+        self.configFileName = self.defaultDirectory + "_" + self.filePrefix + ".cfg"
 
-    def writeToLogFile(self):
+    def writeToLogFile(self): # TODO Write more than 1 second to a file
         start = time.clock()
         if not os.path.exists(self.defaultDirectory):
             os.makedirs(self.defaultDirectory)
-        self.fileName = self.defaultDirectory + self.parentWindow.dataFileSelected + "_" + str(int(float(self.parentWindow.ui.lineEdit_counterelectrodePotential.text()))) + "mV_" + datetime.date.today().strftime("%Y%m%d") + "_" + time.strftime("%H%M%S") + ".hex"
+
         self.f = open(self.fileName, 'a+b')
         # While logging is enabled, write in 1 second bursts. Finish writing everything that is in memory when logging is disabled
-        if (self.parentWindow.ui.action_enableLogging.isChecked()):
+        if (True == self.logging):
             for i in range(globalConstants.REFRESHRATE):
                 self.f.write(self.rawData.get())
         else:
             for i in range(self.rawData.qsize()): # TODO qsize is not a reliable way to clear the queue. Maybe while(not queue.isEmpty())?
                 self.f.write(self.rawData.get())
         self.f.close()
-        self.configFileName = self.fileName[0:len(self.fileName) - 3] + "cfg"
-        self.parentWindow.action_saveState_triggered(self.configFileName)
+        if (not os.path.exists(self.configFileName)):
+            self.parentWindow.action_saveState_triggered(self.configFileName)
         stop = time.clock()
         print "Writing data to disk took", stop-start, "s"
         # if ((stop - start)*1000 > globalConstants.FRAMEDURATION):
         #     print "Probably missed writing some data because it took too long to write the last frame"
         self.finished.emit()
 
+    def setFileName(self, filePrefix):
+        self.filePrefix = filePrefix
+        self.fileName = self.defaultDirectory + self.filePrefix + '_' + self.fpgaType + ".hex"
+        self.configFileName = self.defaultDirectory + self.filePrefix + ".cfg"
+
 class AnalyzeDataWorker(QtCore.QObject):
     """This class provides methods that can detect event edges and perform CUSUM based fitting on events"""
     progress = QtCore.pyqtSignal(int, str)
     edgeDetectionFinished = QtCore.pyqtSignal()
+    quit = QtCore.pyqtSignal()
     finished = QtCore.pyqtSignal()
 
     def __init__(self, parentWindow):
@@ -473,7 +491,7 @@ class AnalyzeDataWorker(QtCore.QObject):
                 self.threshold = self.baseline - self.numberOfSigmas * self.sigma
             else:
                 self.threshold = self.baseline - 5*self.sigma
-            print numpy.std(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
+            #print numpy.std(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
             self.parentWindow.threshold = self.threshold
         #print self.threshold
         try:
@@ -494,6 +512,10 @@ class AnalyzeDataWorker(QtCore.QObject):
     def detectEdges(self):
         """This method determines event edges based on a fixed thresholding scheme"""
         self.eventIndex = (numpy.where(self.rawData < self.threshold)[0]).astype(numpy.int32)
+        if (0 == self.eventIndex.size):
+            print "No events found"
+            self.quit.emit()
+            return
         self.transitions = numpy.diff(self.eventIndex)
         self.edgeBeginIndex = numpy.insert(self.transitions, 0, 2)
         self.edgeEndIndex = numpy.insert(self.transitions, -1, 2)
@@ -556,7 +578,7 @@ class AnalyzeDataWorker(QtCore.QObject):
         self.edgeBegin = self.edgeBegin[self.edgeBegin != 0]
         self.edgeEnd = self.edgeEnd[self.edgeEnd != 0]
         self.numberOfEvents = len(self.edgeBegin)
-        print self.baseline
+        #print self.baseline
 
         # Remove events shorter than duration specified in the GUI
         for i in range(self.numberOfEvents):
