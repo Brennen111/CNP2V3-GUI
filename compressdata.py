@@ -68,7 +68,7 @@ class CompressData(QtGui.QMainWindow):
 
     def comboBox_columnSelect_activated(self, index):
         self.columnSelect = index
-        self.processRawDataWorkerInstance.validColumn = index
+        self.processRawDataWorkerInstance.validColumns = index
 
     def writeCompressedDataToDisk(self):
         self.defaultDirectory = self.currentDirectoryName[:-1] + '_compressed/'

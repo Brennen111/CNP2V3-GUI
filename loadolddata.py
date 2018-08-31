@@ -189,7 +189,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
     def comboBox_columnSelect_activated(self, index):
         """Sets the column selection for the chip. Clears out data about the DC offset current when a column switch is initiated"""
         self.columnSelect = index
-        self.processRawDataWorkerInstance.validColumn = self.columnSelect
+        self.processRawDataWorkerInstance.validColumns = [self.columnSelect]
         self.PSDWorkerInstance.validColumn = self.columnSelect
         if ((self.columnSelect in [0,1]) and (True == self.masterDataInMemory)):
             self.processRawDataWorkerInstance.rawData = self.masterRawData
@@ -420,7 +420,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         """Creates an options window"""
         self.optionsWindow0 = OptionsWindow()
         self.optionsWindow0.show()
-        self.optionsWindow0.accepted.connect(self.displayData)
+        self.optionsWindow0.accepted.connect(self.updateDisplayData)
 
     def loadState(self, stateConfig):
         """This method handles the actual loading of the cfg file"""
@@ -455,11 +455,6 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                 self.adcList[column].idcOffset = stateConfig[i].pop('IDCOffset', 0) # TODO This is being overwritten over and over again but until we implement all 25 channels
                 #self.ui.comboBox_columnSelect.setCurrentIndex(self.columnSelect)
                 self.updateIDCLabels()
-
-    def updateIDCOffset(self, value):
-        """Method created to facilitate loading in the DC offset current value in the dictionary style loading"""
-        self.IDCOffset = value
-        self.updateIDCLabels()
 
     def pushButton_IDCSetOffset_clicked(self):
         """Updates the DC offset current value so that the current being viewed has no DC component left in it"""

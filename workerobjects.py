@@ -15,7 +15,7 @@ class PSDWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal()
     # PSDReady = QtCore.pyqtSignal(numpy.ndarray, numpy.ndarray)
     PSDReady = QtCore.pyqtSignal(int)
-    histogramReady = QtCore.pyqtSignal()
+    #histogramReady = QtCore.pyqtSignal()
     #Signal for progress bar
     progress = QtCore.pyqtSignal(int, str)
 
@@ -49,7 +49,7 @@ class PSDWorker(QtCore.QObject):
         self.parentWindow.adcList[self.validColumn].histogramView, self.parentWindow.adcList[self.validColumn].bins = numpy.histogram(self.ADCData, bins=64)
         self.parentWindow.adcList[self.validColumn].bins /= (globalConstants.AAFILTERGAIN*self.parentWindow.RDCFB)
         self.parentWindow.adcList[self.validColumn].bins -= self.parentWindow.adcList[self.validColumn].idcOffset
-        self.histogramReady.emit() # TODO
+        #self.histogramReady.emit() # TODO
         self.progress.emit(2, 'Calculating PSD')
         #### Begin PSD calculation
         # f, Pxx = scipy.signal.periodogram(self.ADCData, globalConstants.ADCSAMPLINGRATE, nfft=2**19)
@@ -133,9 +133,9 @@ class GetDataFromFPGAWorker(QtCore.QObject):
         if self.FPGAInstance is not None:
             self.FPGAType = self.FPGAInstance.type
             self.validColumns = self.FPGAInstance.validColumns
-            self.processRawDataThreadOptions = {'Master': self.parentWindow.processRawDataADC0Thread, 'Slave': self.parentWindow.processRawDataADC1Thread}
+            self.processRawDataThreadOptions = {'Master': self.parentWindow.processRawDataADCMasterThread, 'Slave': self.parentWindow.processRawDataADCSlaveThread}
             self.processRawDataThread = self.processRawDataThreadOptions[self.FPGAType]
-            self.processRawDataADCWorkerInstanceOptions = {'Master': self.parentWindow.processRawDataADC0WorkerInstance, 'Slave': self.parentWindow.processRawDataADC1WorkerInstance}
+            self.processRawDataADCWorkerInstanceOptions = {'Master': self.parentWindow.processRawDataADCMasterWorkerInstance, 'Slave': self.parentWindow.processRawDataADCSlaveWorkerInstance}
             self.processRawDataADCWorkerInstance = self.processRawDataADCWorkerInstanceOptions[self.FPGAType]
 
     def getDataFromFPGA(self):
@@ -199,6 +199,7 @@ class GetDataFromFPGAWorker(QtCore.QObject):
                 error = self.FPGAInstance.xem.SetWireInValue(command[2], command[3], command[4])
             elif (globalConstants.CMDUPDATEWIRE == command[0]):
                 error = self.FPGAInstance.xem.UpdateWireIns()
+                error = self.FPGAInstance.xem.NoError  # This is needed because in the Windows Opal Kelly FrontPanel API UpdateWiresIn() has no return, despite documentation
             elif (globalConstants.CMDTRIGGERWIRE == command[0]):
                 error = self.FPGAInstance.xem.ActivateTriggerIn(command[2], command[3])
             else:
@@ -252,7 +253,7 @@ class ProcessRawDataWorker(QtCore.QObject):
             else:
                 ADCData = numpy.frombuffer(self.rawData, dtype='int16').astype(numpy.float32)
 
-        self.numba_scale(ADCData, globalConstants.ADCBITS)
+            self.numba_scale(ADCData, globalConstants.ADCBITS)
 
             if (self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked()):
                 # ADCData2[ADCData2 >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
@@ -318,7 +319,6 @@ class ProcessRawDataWorker(QtCore.QObject):
             dataToDisplay *= 1.0/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN #Prefixes (like nano or pico) are handled automatically by PyQtGraph
             self.parentWindow.adcList[column].idcRelative = numpy.mean(dataToDisplay) - self.parentWindow.adcList[column].idcOffset
             dataToDisplay -= self.parentWindow.adcList[column].idcOffset
-            self.parentWindow.updateIDCLabels()
             self.progress.emit(1, 'Finished calculating data to display')
 
             self.parentWindow.adcList[column].adcData = ADCData

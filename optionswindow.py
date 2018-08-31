@@ -80,7 +80,7 @@ class OptionsWindow(QtGui.QDialogButtonBox):
         globalConstants.BLOCKLENGTH = self.BLOCKLENGTH
         globalConstants.MBCOMMONMODE = self.MBCOMMONMODE
         globalConstants.FRAMEDURATION = 1000/self.REFRESHRATE
-        globalConstants.FRAMELENGTH_MASTER = (((self.ADCSAMPLINGRATE*globalConstants.FRAMEDURATION/1000)*4)/4000000 + 0)*4000000
+        globalConstants.FRAMELENGTH_MASTER = int((((globalConstants.ADCSAMPLINGRATE*globalConstants.FRAMEDURATION/1000)*4)/4000000. + 0)*4000000)
         globalConstants.FRAMELENGTH_SLAVE = (int((self.ADCSAMPLINGRATE*globalConstants.FRAMEDURATION/1000)*4.0*4/3)/4000000 + 1)*4000000
         globalConstants.PRESETMODE = self.PRESETMODE
 

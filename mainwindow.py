@@ -532,29 +532,30 @@ class MainWindow(QtGui.QMainWindow):
         self.PSDThread = QtCore.QThread()
         self.PSDWorkerInstance = workerobjects.PSDWorker(self)
         self.PSDWorkerInstance.moveToThread(self.PSDThread)
-        self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewSingleChannelPlot)
-        self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewRowPlot)
+        #self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewSingleChannelPlot)
+        #self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewRowPlot)
         self.PSDWorkerInstance.finished.connect(self.PSDThread.quit)
         self.PSDWorkerInstance.finished.connect(self.updateNoiseLabels)
+        self.PSDWorkerInstance.finished.connect(self.updateIDCLabels)
         self.PSDThread.started.connect(self.PSDWorkerInstance.calculatePSD)
 
         self.processRawDataADCMasterThread = QtCore.QThread()
-        self.processRawDataADCMasterWorkerInstance = workerobjects.ProcessRawDataWorker(self, 0)
+        self.processRawDataADCMasterWorkerInstance = workerobjects.ProcessRawDataWorker(self, [0, 1])
         self.processRawDataADCMasterWorkerInstance.moveToThread(self.processRawDataADCMasterThread)
         self.processRawDataADCMasterWorkerInstance.finished.connect(self.processRawDataADCMasterThread.quit)
         self.processRawDataADCMasterWorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADCMasterWorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
         self.processRawDataADCMasterWorkerInstance.startPSDThread.connect(self.PSDThread.start)
-        self.processRawDataADC0Thread.started.connect(self.processRawDataADCMasterWorkerInstance.processRawData)
+        self.processRawDataADCMasterThread.started.connect(self.processRawDataADCMasterWorkerInstance.processRawData)
 
         self.processRawDataADCSlaveThread = QtCore.QThread()
-        self.processRawDataADCSlaveWorkerInstance = workerobjects.ProcessRawDataWorker(self, 1)
+        self.processRawDataADCSlaveWorkerInstance = workerobjects.ProcessRawDataWorker(self, [2, 3, 4])
         self.processRawDataADCSlaveWorkerInstance.moveToThread(self.processRawDataADCSlaveThread)
         self.processRawDataADCSlaveWorkerInstance.finished.connect(self.processRawDataADCSlaveThread.quit)
         self.processRawDataADCSlaveWorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
-        self.processRawDataADC1WorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
+        self.processRawDataADCSlaveWorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
         self.processRawDataADCSlaveWorkerInstance.startPSDThread.connect(self.PSDThread.start)
-        self.processRawDataADCSlaveWorkerInstance.started.connect(self.processRawDataADCSlaveWorkerInstance.processRawData)
+        self.processRawDataADCSlaveThread.started.connect(self.processRawDataADCSlaveWorkerInstance.processRawData)
 
         # self.processRawDataADC2Thread = QtCore.QThread()
         # self.processRawDataADC2WorkerInstance = workerobjects.ProcessRawDataWorker(self, 2)
@@ -635,10 +636,10 @@ class MainWindow(QtGui.QMainWindow):
         self.getDataFromFPGAMasterThread.wait()
         self.getDataFromFPGASlaveThread.quit()
         self.getDataFromFPGASlaveThread.wait()
-        self.processRawDataADC0Thread.quit()
-        self.processRawDataADC0Thread.wait()
-        self.processRawDataADC1Thread.quit()
-        self.processRawDataADC1Thread.wait()
+        self.processRawDataADCMasterThread.quit()
+        self.processRawDataADCMasterThread.wait()
+        self.processRawDataADCSlaveThread.quit()
+        self.processRawDataADCSlaveThread.wait()
         self.PSDThread.quit()
         self.PSDThread.wait()
         self.writeToMasterLogFileThread.quit()
@@ -1498,11 +1499,6 @@ class MainWindow(QtGui.QMainWindow):
     def action_compressData_triggered(self): # TODO
         self.compressDataWindow0 = CompressData()
         self.compressDataWindow0.show()
-
-    def updateIDCOffset(self, value): # TODO
-        """Method created to facilitate loading in the DC offset current value in the dictionary style loading"""
-        self.adcList[self.columnSelect].idcOffset = value
-        self.updateIDCLabels()
 
     def action_options_triggered(self): # TODO
         """Creates an options window"""
