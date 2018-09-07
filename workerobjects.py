@@ -14,18 +14,18 @@ class PSDWorker(QtCore.QObject):
     # finished = QtCore.pyqtSignal(numpy.float64, numpy.float64)
     finished = QtCore.pyqtSignal()
     # PSDReady = QtCore.pyqtSignal(numpy.ndarray, numpy.ndarray)
-    PSDReady = QtCore.pyqtSignal(int)
+    PSDReady = QtCore.pyqtSignal(list)
     #histogramReady = QtCore.pyqtSignal()
     #Signal for progress bar
     progress = QtCore.pyqtSignal(int, str)
 
-    def __init__(self, parentWindow):
+    def __init__(self, parentWindow, validColumns):
         super(PSDWorker, self).__init__()
         self.parentWindow = parentWindow
         self.needsScaling = False
-        self.ADCData = []
-        self.adcDataRMS = 0
-        self.validColumn = None
+        self.ADCData = [None] * 5 # TODO Does this work?
+        self.adcDataRMS = [None] * 5 # TODO Does this work?
+        self.validColumns = validColumns
 
     @numba.jit
     def numba_scale(self, array, bits=12):
@@ -36,78 +36,80 @@ class PSDWorker(QtCore.QObject):
 
     def calculatePSD(self):
         self.start = time.clock()
+        
+        for column in self.validColumns:
+            if (self.needsScaling):
+                self.numba_scale(self.ADCData[column], globalConstants.ADCBITS)
+                # self.ADCData[self.ADCData >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
+                # self.ADCData /= 2**(globalConstants.ADCBITS-1)
+                self.ADCData[column] -= numpy.mean(self.ADCData[column])
+            # if (True == self.parentWindow.ui.checkBox_enableSquareWave.isChecked()):
+                # self.calculateDCResistance(column)
+            # if (window.columnSelect in [0, 3]):
+                # self.ADCData *= 16.0/5
+            self.parentWindow.adcList[column].histogramView, self.parentWindow.adcList[column].bins = numpy.histogram(self.ADCData[column], bins=64)
+            self.parentWindow.adcList[column].bins /= (globalConstants.AAFILTERGAIN*self.parentWindow.RDCFB)
+            self.parentWindow.adcList[column].bins -= self.parentWindow.adcList[column].idcOffset
+            #self.histogramReady.emit() # TODO
+            self.progress.emit(2, 'Calculating PSD')
+            #### Begin PSD calculation
+            # f, Pxx = scipy.signal.periodogram(self.ADCData, globalConstants.ADCSAMPLINGRATE, nfft=2**19)
+            f, Pxx = scipy.signal.welch(self.ADCData[column], globalConstants.ADCSAMPLINGRATE, nperseg=2**13) # PSD Estimation
+            # f, Pxx = scipy.signal.periodogram(self.ADCData[column], globalConstants.ADCSAMPLINGRATE) # Full PSD Calculation (Slowest)
+            #### End PSD calculation
 
-        if (self.needsScaling):
-            self.numba_scale(self.ADCData, globalConstants.ADCBITS)
-            # self.ADCData[self.ADCData >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
-            # self.ADCData /= 2**(globalConstants.ADCBITS-1)
-            self.ADCData -= numpy.mean(self.ADCData)
-        # if (True == self.parentWindow.ui.checkBox_enableSquareWave.isChecked()):
-            # self.calculateDCResistance()
-        # if (window.columnSelect in [0, 3]):
-            # self.ADCData *= 16.0/5
-        self.parentWindow.adcList[self.validColumn].histogramView, self.parentWindow.adcList[self.validColumn].bins = numpy.histogram(self.ADCData, bins=64)
-        self.parentWindow.adcList[self.validColumn].bins /= (globalConstants.AAFILTERGAIN*self.parentWindow.RDCFB)
-        self.parentWindow.adcList[self.validColumn].bins -= self.parentWindow.adcList[self.validColumn].idcOffset
-        #self.histogramReady.emit() # TODO
-        self.progress.emit(2, 'Calculating PSD')
-        #### Begin PSD calculation
-        # f, Pxx = scipy.signal.periodogram(self.ADCData, globalConstants.ADCSAMPLINGRATE, nfft=2**19)
-        f, Pxx = scipy.signal.welch(self.ADCData, globalConstants.ADCSAMPLINGRATE, nperseg=2**13)
-        #### End PSD calculation
+            #### Begin FFT calculation
+            # NFFT = 2**19
+            # ADCSAMPLINGRATE = globalConstants.ADCSAMPLINGRATE
+            # ADCDataFFT = numpy.fft.fft(self.ADCData, NFFT)
+            # ADCDataFFT = ADCDataFFT[1:NFFT/2]
+            # f = ADCSAMPLINGRATE/2*numpy.linspace(0, 1, NFFT/2)
+            # f = f[1:len(f)]
+            # Pxx = 2.0/(ADCSAMPLINGRATE*NFFT)*numpy.abs(numpy.square(ADCDataFFT))
+            #### End FFT calculation
 
-        #### Begin FFT calculation
-        # NFFT = 2**19
-        # ADCSAMPLINGRATE = globalConstants.ADCSAMPLINGRATE
-        # ADCDataFFT = numpy.fft.fft(self.ADCData, NFFT)
-        # ADCDataFFT = ADCDataFFT[1:NFFT/2]
-        # f = ADCSAMPLINGRATE/2*numpy.linspace(0, 1, NFFT/2)
-        # f = f[1:len(f)]
-        # Pxx = 2.0/(ADCSAMPLINGRATE*NFFT)*numpy.abs(numpy.square(ADCDataFFT))
-        #### End FFT calculation
+            # f_100Hz = numpy.argmin(numpy.abs(f - 1e2))
+            Pxx = Pxx[f > 1e2]
+            f = f[f>1e2]
+            # PxxFitCoefficients = numpy.polynomial.polynomial.polyfit(f[f<6e6], Pxx[f<6e6]*f[f<6e6], 3)
+            # f, Pxx = f[f_100Hz:len(f)], Pxx[f_100Hz:len(Pxx)]
+            self.progress.emit(2, 'Preparing PSD data for plotting')
+            f_10kHz = numpy.where(f > 1e4)[0][0]
+            f_100kHz = numpy.where(f > 1e5)[0][0]
+            f_1MHz = numpy.where(f > 1e6)[0][0]
 
-        # f_100Hz = numpy.argmin(numpy.abs(f - 1e2))
-        Pxx = Pxx[f > 1e2]
-        f = f[f>1e2]
-        # PxxFitCoefficients = numpy.polynomial.polynomial.polyfit(f[f<6e6], Pxx[f<6e6]*f[f<6e6], 3)
-        # f, Pxx = f[f_100Hz:len(f)], Pxx[f_100Hz:len(Pxx)]
-        self.progress.emit(2, 'Preparing PSD data for plotting')
-        f_100kHz = numpy.where(f > 1e5)[0][0]
-        f_1MHz = numpy.where(f > 1e6)[0][0]
-        # f_10MHz = numpy.where(f > 10e6)[0][0]
-        f_10MHz = 0
-        if (self.needsScaling == False and self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked() == True):
-            f_PSDStopFrequency = numpy.where(f > self.parentWindow.livePreviewFilterBandwidth)[0][0]
-        else:
-            # f_PSDStopFrequency = numpy.where(f > 10e6)[0][0]
-            f_PSDStopFrequency = numpy.where(f > 1e6)[0][0]
-        logIndices = numpy.unique(numpy.asarray(numpy.logspace(0, numpy.log10(f_PSDStopFrequency), f_PSDStopFrequency/globalConstants.SUBSAMPLINGFACTOR, dtype=numpy.int32)))
-        self.parentWindow.adcList[self.validColumn].f = f[logIndices-1]
-        if (hasattr(self.parentWindow.ui, 'checkBox_frequencyResponse') and self.parentWindow.ui.checkBox_frequencyResponse.isChecked() == True):
-            self.parentWindow.adcList[self.validColumn].psd = numpy.divide(Pxx[logIndices-1], f[logIndices-1]**2)
-        else:
-            self.parentWindow.adcList[self.validColumn].psd = Pxx[logIndices-1]
-        if (self.parentWindow.ui.action_addNoiseFit.isChecked() == True): # TODO
-            self.parentWindow.adcList[self.validColumn].psdFit = self.createFit(self.parentWindow.adcList[self.validColumn].f, self.parentWindow.adcList[self.validColumn].psd, 1e6)
-        # self.PSDReady.emit(fToDisplay, PxxToDisplay)
-        self.PSDReady.emit(self.validColumn)
+            if (self.needsScaling == False and self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked() == True):
+                f_PSDStopFrequency = numpy.where(f > self.parentWindow.livePreviewFilterBandwidth)[0][0]
+            else:
+                # f_PSDStopFrequency = numpy.where(f > 10e6)[0][0]
+                f_PSDStopFrequency = numpy.where(f > 1e6)[0][0]
+            logIndices = numpy.unique(numpy.asarray(numpy.logspace(0, numpy.log10(f_PSDStopFrequency), f_PSDStopFrequency/globalConstants.SUBSAMPLINGFACTOR, dtype=numpy.int32)))
+            self.parentWindow.adcList[column].f = f[logIndices-1]
+            if (hasattr(self.parentWindow.ui, 'checkBox_frequencyResponse') and self.parentWindow.ui.checkBox_frequencyResponse.isChecked() == True):
+                self.parentWindow.adcList[column].psd = numpy.divide(Pxx[logIndices-1], f[logIndices-1]**2)
+            else:
+                self.parentWindow.adcList[column].psd = Pxx[logIndices-1]
+            if (self.parentWindow.ui.action_addNoiseFit.isChecked() == True): # TODO
+                self.parentWindow.adcList[column].psdFit = self.createFit(self.parentWindow.adcList[column].f, self.parentWindow.adcList[column].psd, 1e6)
+
+            rmsNoise = numpy.sqrt(scipy.integrate.cumtrapz(Pxx, f, initial=0))/globalConstants.AAFILTERGAIN/self.parentWindow.RDCFB
+            self.parentWindow.adcList[column].rmsNoise = rmsNoise[logIndices-1]
+
+            self.parentWindow.adcList[column].rmsNoise_10kHz = numpy.round(rmsNoise[f_10kHz-1] * 10**12, 1)
+            self.parentWindow.adcList[column].rmsNoise_100kHz = numpy.round(rmsNoise[f_100kHz-1] * 10**12, 1)
+            self.parentWindow.adcList[column].rmsNoise_1MHz = numpy.round(rmsNoise[f_1MHz-1] * 10**12, 1)
+   
+        self.PSDReady.emit(self.validColumns)
         self.progress.emit(1, 'Finishing up')
-
-        rmsNoise = numpy.sqrt(scipy.integrate.cumtrapz(Pxx, f, initial=0))/globalConstants.AAFILTERGAIN/self.parentWindow.RDCFB
-        self.parentWindow.adcList[self.validColumn].rmsNoise = rmsNoise[logIndices-1]
-
-        self.parentWindow.adcList[self.validColumn].rmsNoise_100kHz = numpy.round(rmsNoise[f_100kHz] * 10**12, 1)
-        self.parentWindow.adcList[self.validColumn].rmsNoise_1MHz = numpy.round(rmsNoise[f_1MHz] * 10**12, 1)
-        self.parentWindow.adcList[self.validColumn].rmsNoise_10MHz = numpy.round(rmsNoise[f_10MHz-1] * 10**12, 1)
         self.stop = time.clock()
         # print "Calculate PSD thread took", self.stop-self.start, "s"
         # self.finished.emit(numpy.round(RMSNoise_100kHz * 10**12, 1), numpy.round(RMSNoise_1MHz * 10**12, 1))
         self.finished.emit()
 
-    def calculateDCResistance(self):
-        self.adcDataRMS = numpy.sqrt(numpy.mean(numpy.power(self.ADCData, 2)))
-        self.adcList[self.validColumn].poreResistance = globalConstants.SQUAREWAVEAMPLITUDE/self.adcDataRMS*globalConstants.AAFILTERGAIN*self.parentWindow.adcList[self.validColumn].rdcfb
-        self.parentWindow.ui.label_poreResistance.setText(str(numpy.round(self.adcList[self.validColumn].poreResistance/1e6, 1)) + u"MΩ") # TODO
+    def calculateDCResistance(self, column):
+        self.adcDataRMS[column] = numpy.sqrt(numpy.mean(numpy.power(self.ADCData[column], 2)))
+        self.adcList[column].poreResistance = globalConstants.SQUAREWAVEAMPLITUDE/self.adcDataRMS[column]*globalConstants.AAFILTERGAIN*self.parentWindow.RDCFB
+        self.parentWindow.ui.label_poreResistance.setText(str(numpy.round(self.adcList[column].poreResistance/1e6, 1)) + u"MΩ") # TODO
 
     def createFit(self, fFit, PSDFit, maxFitFrequency = 6e6):
         fFitNew = fFit[fFit < maxFitFrequency]
@@ -210,12 +212,12 @@ class GetDataFromFPGAWorker(QtCore.QObject):
 class ProcessRawDataWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal()
     # dataReady = QtCore.pyqtSignal(numpy.ndarray)
-    dataReady = QtCore.pyqtSignal(int)
+    dataReady = QtCore.pyqtSignal(list)
     startPSDThread = QtCore.pyqtSignal()
     #Signals for the progress bar
     progress = QtCore.pyqtSignal(int, str)
 
-    def __init__(self, parentWindow, validColumns):
+    def __init__(self, parentWindow, validColumns, PSDWorkerInstance, PSDThread):
         super(ProcessRawDataWorker, self).__init__()
         self.skipPoints = 0
         self.createFilter(100e3)
@@ -223,6 +225,13 @@ class ProcessRawDataWorker(QtCore.QObject):
         self.validColumns = validColumns
         self.rawDataUnpacked = 0
         self.compressedData = False
+        
+        # self.PSDThreadOptions = {'Master': self.parentWindow.PSDMasterThread, 'Slave': self.parentWindow.PSDSlaveThread}
+        # self.PSDThread = self.PSDThreadOptions[self.FPGAType]
+        # self.PSDWorkerInstanceOptions = {'Master': self.parentWindow.PSDMasterWorkerInstance, 'Slave': self.parentWindow.PSDSlaveWorkerInstance}
+        # self.PSDWorkerInstance = self.PSDWorkerInstanceOptions[self.FPGAType]
+        self.PSDWorkerInstance = PSDWorkerInstance
+        self.PSDThread = PSDThread
 
     @numba.jit
     def numba_scale(self, array, bits=12):
@@ -241,24 +250,25 @@ class ProcessRawDataWorker(QtCore.QObject):
 
     def processRawData(self):
         """Processes the raw data. The raw data is a 32 bit number that contains {8'h00, 12'hADC1Data, 12'hADC0DATA}. This method unpacks the data and then subsamples it and corrects for the boosting and anti-aliasing filter gain and DC offset."""
+        #self.start = time.clock()
+        ADCData = [None] * 5
         for column in self.validColumns:
-            #self.start = time.clock()
             # self.rawDataUnpacked = numpy.frombuffer(self.rawData, dtype='uint32')
             # ADCData = {0: numpy.bitwise_and(self.rawDataUnpacked, 0xfff),\
                     # 1: (numpy.bitwise_and(self.rawDataUnpacked, 0xfff000))>>12,\
                     # 3: numpy.bitwise_and(self.rawDataUnpacked, 0xfff)}
             # Switched from dictionary to if else implementation because of timing issues while displaying data
             if self.compressedData == False:
-                ADCData = self.unpackData(column).astype(numpy.float32)
+                ADCData[column] = self.unpackData(column).astype(numpy.float32)
             else:
-                ADCData = numpy.frombuffer(self.rawData, dtype='int16').astype(numpy.float32)
+                ADCData[column] = numpy.frombuffer(self.rawData, dtype='int16').astype(numpy.float32)
 
-            self.numba_scale(ADCData, globalConstants.ADCBITS)
+            self.numba_scale(ADCData[column], globalConstants.ADCBITS)
 
             if (self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked()):
                 # ADCData2[ADCData2 >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
                 # ADCData2 /= 2**(globalConstants.ADCBITS-1)
-                ADCData = scipy.signal.lfilter(self.b, self.a, ADCData)
+                ADCData[column] = scipy.signal.lfilter(self.b, self.a, ADCData[column])
 
                 #ADCData2[:-1] += numpy.diff(ADCData2)/(2*numpy.pi*2.5e6/globalConstants.ADCSAMPLINGRATE)
 
@@ -279,12 +289,10 @@ class ProcessRawDataWorker(QtCore.QObject):
                 # tags = ADCData < -5*totalNoise
                 # print totalNoise/self.parentWindow.RDCFB, numpy.sum(numpy.bitwise_and(numpy.bitwise_and(tags[:-3], tags[1:-2]), numpy.bitwise_and(tags[2:-1], tags[3:])))
 
-                ADCData = ADCData[self.skipPoints:]
-                dataToDisplay = ADCData[::globalConstants.SUBSAMPLINGFACTOR]
+                ADCData[column] = ADCData[column][self.skipPoints:]
                 if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')): #TODO
-                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[::self.skipPoints/4]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[column][::self.skipPoints/4]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
                     self.parentWindow.analyzeDataWorkerInstance.effectiveSamplingRate = globalConstants.ADCSAMPLINGRATE/self.skipPoints*4
-
             else:
                 #ADCData[:-1] += numpy.diff(ADCData)/(2*numpy.pi*2.5e6/globalConstants.ADCSAMPLINGRATE)
                 # if (self.parentWindow.ui.checkBox_enableWaveletDenoising.isChecked()):
@@ -309,37 +317,29 @@ class ProcessRawDataWorker(QtCore.QObject):
                 #         self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[self.validColumn].idcOffset
 
                 if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
-                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[column][:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
 
-                dataToDisplay = ADCData[::globalConstants.SUBSAMPLINGFACTOR]
-                # dataToDisplay[dataToDisplay >= 2**(globalConstants.ADCBITS-1)] -= 2**(globalConstants.ADCBITS)
-                # dataToDisplay /= 2**(globalConstants.ADCBITS-1)
-                # self.numba_scale(dataToDisplay, globalConstants.ADCBITS)
-
-            dataToDisplay *= 1.0/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN #Prefixes (like nano or pico) are handled automatically by PyQtGraph
-            self.parentWindow.adcList[column].idcRelative = numpy.mean(dataToDisplay) - self.parentWindow.adcList[column].idcOffset
-            dataToDisplay -= self.parentWindow.adcList[column].idcOffset
+            self.parentWindow.adcList[column].idcRelative = numpy.mean(ADCData[column])*1.0/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
             self.progress.emit(1, 'Finished calculating data to display')
 
-            self.parentWindow.adcList[column].adcData = ADCData
+            # self.parentWindow.adcList[column].adcData = ADCData[column] # I never use this
 
             if (hasattr(self.parentWindow.ui, 'action_enableLivePreview') and self.parentWindow.ui.action_enableLivePreview.isChecked() == False):
                 pass
             else:
-                if (self.parentWindow.columnSelect == column):
-                    self.parentWindow.dataToDisplay = dataToDisplay
-                self.parentWindow.adcList[column].yDataToDisplay = dataToDisplay
-                self.parentWindow.adcList[column].xDataToDisplay = numpy.linspace(0, len(dataToDisplay) * globalConstants.SUBSAMPLINGFACTOR * 1.0 / globalConstants.ADCSAMPLINGRATE, len(dataToDisplay))
+                self.parentWindow.adcList[column].yDataToDisplay = (ADCData[column][::globalConstants.SUBSAMPLINGFACTOR]*1.0/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN) - self.parentWindow.adcList[column].idcOffset #Prefixes (like nano or pico) are handled automatically by PyQtGraph
+                self.parentWindow.adcList[column].xDataToDisplay = numpy.linspace(0, len(self.parentWindow.adcList[column].yDataToDisplay) * globalConstants.SUBSAMPLINGFACTOR * 1.0 / globalConstants.ADCSAMPLINGRATE, len(self.parentWindow.adcList[column].yDataToDisplay))
+            
+            
+        if (not self.PSDThread.isRunning()):
+            for column in self.PSDWorkerInstance.validColumns:
+                self.PSDWorkerInstance.ADCData[column] = ADCData[column]
+            self.startPSDThread.emit()
+            self.progress.emit(1, 'Calculating histogram')
 
-            if (not self.parentWindow.PSDThread.isRunning()):
-                self.parentWindow.PSDWorkerInstance.ADCData = ADCData #ADCData is sent as float32
-                self.parentWindow.PSDWorkerInstance.validColumn = column
-                self.startPSDThread.emit()
-                self.progress.emit(1, 'Calculating histogram')
-
-            self.stop = time.clock()
-            # print "Processing the data took", self.stop-self.start, "s"
-            self.dataReady.emit(column)
+        self.stop = time.clock()
+        # print "Processing the data took", self.stop-self.start, "s"
+        self.dataReady.emit(self.validColumns)
         self.finished.emit()
 
     def createFilter(self, livePreviewFilterBandwidth):
@@ -350,10 +350,10 @@ class ProcessRawDataWorker(QtCore.QObject):
         self.skipPoints = int(numpy.ceil(globalConstants.ADCSAMPLINGRATE/self.livePreviewFilterBandwidth))
         self.b, self.a = scipy.signal.bessel(4, self.livePreviewFilterBandwidth/globalConstants.ADCSAMPLINGRATE*2, 'low')
 
-    def compressData(self):
-        return self.unpackData().astype(numpy.int16)
+    def compressData(self, column):
+        return self.unpackData(column).astype(numpy.int16)
 
-    #@numba.jit    
+    #@numba.jit
     @numba.jit('uint32[:](pyobject, uint32[:], uint32, uint64, uint8[:])')
     def numba_bitwise_and(self, array, mask, shift, resulttype='uint32'):
         """Numba implementation of AND function with masking and shifting ability"""
@@ -466,12 +466,12 @@ class AnalyzeDataWorker(QtCore.QObject):
         """This method determines the baseline and threshold values to be used for event detection"""
         # self.generateBaselineStartIndex = 222000e-6*self.effectiveSamplingRate
         # self.generateBaselineStopIndex = 232000e-6*self.effectiveSamplingRate
-        if self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked() is False: # TODO This is never True?
+        if self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked() is False:
             self.effectiveSamplingRate = globalConstants.ADCSAMPLINGRATE
         self.generateBaselineStartIndex = int(238900e-6*self.effectiveSamplingRate)
         self.generateBaselineStopIndex = int(239500e-6*self.effectiveSamplingRate)
         #print self.generateBaselineStartIndex, self.generateBaselineStopIndex
-        if (self.parentWindow.baseline is not None):
+        if (None != self.parentWindow.baseline):
             self.baseline = self.parentWindow.baseline
         else:
             self.baseline = numpy.mean(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
@@ -483,10 +483,10 @@ class AnalyzeDataWorker(QtCore.QObject):
         self.sigma = numpy.std(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
         #print self.sigma
         self.parentWindow.sigma = self.sigma
-        if (self.parentWindow.threshold is not None):
+        if (None != self.parentWindow.threshold):
             self.threshold = self.parentWindow.threshold
         else:
-            if (hasattr(self.parentWindow, 'numberOfSigmas')):
+            if (None != self.parentWindow.numberOfSigmas):
                 self.numberOfSigmas = self.parentWindow.numberOfSigmas
                 self.threshold = self.baseline - self.numberOfSigmas * self.sigma
             else:

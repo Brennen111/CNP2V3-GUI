@@ -1064,7 +1064,7 @@
                          <item row="0" column="0">
                           <widget class="QLabel" name="label_12">
                            <property name="text">
-                            <string>100kHz:</string>
+                            <string>10kHz:</string>
                            </property>
                            <property name="alignment">
                             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -1072,7 +1072,7 @@
                           </widget>
                          </item>
                          <item row="0" column="1">
-                          <widget class="QLabel" name="label_100kHzNoise">
+                          <widget class="QLabel" name="label_10kHzNoise">
                            <property name="text">
                             <string>0.0</string>
                            </property>
@@ -1081,7 +1081,7 @@
                          <item row="1" column="0">
                           <widget class="QLabel" name="label_13">
                            <property name="text">
-                            <string>1MHz:</string>
+                            <string>100kHz:</string>
                            </property>
                            <property name="alignment">
                             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -1089,7 +1089,7 @@
                           </widget>
                          </item>
                          <item row="1" column="1">
-                          <widget class="QLabel" name="label_1MHzNoise">
+                          <widget class="QLabel" name="label_100kHzNoise">
                            <property name="text">
                             <string>0.0</string>
                            </property>
@@ -1098,7 +1098,7 @@
                          <item row="2" column="0">
                           <widget class="QLabel" name="label_16">
                            <property name="text">
-                            <string>10MHz:</string>
+                            <string>1MHz:</string>
                            </property>
                            <property name="alignment">
                             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -1106,7 +1106,7 @@
                           </widget>
                          </item>
                          <item row="2" column="1">
-                          <widget class="QLabel" name="label_10MHzNoise">
+                          <widget class="QLabel" name="label_1MHzNoise">
                            <property name="text">
                             <string>0.0</string>
                            </property>
@@ -2873,7 +2873,7 @@
                </widget>
               </item>
               <item row="4" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn0100kHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn010kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -2882,7 +2882,7 @@
               <item row="4" column="2">
                <widget class="QLabel" name="label_19">
                 <property name="text">
-                 <string>100k:</string>
+                 <string>10k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -2892,7 +2892,7 @@
               <item row="5" column="2">
                <widget class="QLabel" name="label_21">
                 <property name="text">
-                 <string>1M:</string>
+                 <string>100k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -2900,7 +2900,7 @@
                </widget>
               </item>
               <item row="6" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn010MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn01MHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3010,7 +3010,7 @@
               <item row="6" column="2">
                <widget class="QLabel" name="label_22">
                 <property name="text">
-                 <string>10M:</string>
+                 <string>1M:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3018,7 +3018,7 @@
                </widget>
               </item>
               <item row="5" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn01MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn0100kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3174,7 +3174,7 @@
                </widget>
               </item>
               <item row="4" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn1100kHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn110kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3183,7 +3183,7 @@
               <item row="4" column="2">
                <widget class="QLabel" name="label_35">
                 <property name="text">
-                 <string>100k:</string>
+                 <string>10k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3193,7 +3193,7 @@
               <item row="5" column="2">
                <widget class="QLabel" name="label_36">
                 <property name="text">
-                 <string>1M:</string>
+                 <string>100k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3201,7 +3201,7 @@
                </widget>
               </item>
               <item row="6" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn110MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn11MHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3311,7 +3311,7 @@
               <item row="6" column="2">
                <widget class="QLabel" name="label_40">
                 <property name="text">
-                 <string>10M:</string>
+                 <string>1M:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3319,7 +3319,7 @@
                </widget>
               </item>
               <item row="5" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn11MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn1100kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3478,7 +3478,7 @@
                </widget>
               </item>
               <item row="4" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn2100kHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn210kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3487,7 +3487,7 @@
               <item row="4" column="2">
                <widget class="QLabel" name="label_41">
                 <property name="text">
-                 <string>100k:</string>
+                 <string>10k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3497,7 +3497,7 @@
               <item row="5" column="2">
                <widget class="QLabel" name="label_42">
                 <property name="text">
-                 <string>1M:</string>
+                 <string>100k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3505,7 +3505,7 @@
                </widget>
               </item>
               <item row="6" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn210MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn21MHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3615,7 +3615,7 @@
               <item row="6" column="2">
                <widget class="QLabel" name="label_46">
                 <property name="text">
-                 <string>10M:</string>
+                 <string>1M:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3623,7 +3623,7 @@
                </widget>
               </item>
               <item row="5" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn21MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn2100kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3779,7 +3779,7 @@
                </widget>
               </item>
               <item row="4" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn3100kHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn310kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3788,7 +3788,7 @@
               <item row="4" column="2">
                <widget class="QLabel" name="label_47">
                 <property name="text">
-                 <string>100k:</string>
+                 <string>10k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3798,7 +3798,7 @@
               <item row="5" column="2">
                <widget class="QLabel" name="label_48">
                 <property name="text">
-                 <string>1M:</string>
+                 <string>100k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3806,7 +3806,7 @@
                </widget>
               </item>
               <item row="6" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn310MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn31MHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -3916,7 +3916,7 @@
               <item row="6" column="2">
                <widget class="QLabel" name="label_52">
                 <property name="text">
-                 <string>10M:</string>
+                 <string>1M:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -3924,7 +3924,7 @@
                </widget>
               </item>
               <item row="5" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn31MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn3100kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -4080,7 +4080,7 @@
                </widget>
               </item>
               <item row="4" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn4100kHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn410kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -4089,7 +4089,7 @@
               <item row="4" column="2">
                <widget class="QLabel" name="label_23">
                 <property name="text">
-                 <string>100k:</string>
+                 <string>10k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -4099,7 +4099,7 @@
               <item row="5" column="2">
                <widget class="QLabel" name="label_29">
                 <property name="text">
-                 <string>1M:</string>
+                 <string>100k:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -4107,7 +4107,7 @@
                </widget>
               </item>
               <item row="6" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn410MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn41MHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>
@@ -4217,7 +4217,7 @@
               <item row="6" column="2">
                <widget class="QLabel" name="label_34">
                 <property name="text">
-                 <string>10M:</string>
+                 <string>1M:</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -4225,7 +4225,7 @@
                </widget>
               </item>
               <item row="5" column="3">
-               <widget class="QLabel" name="label_rowPlotColumn41MHzNoise">
+               <widget class="QLabel" name="label_rowPlotColumn4100kHzNoise">
                 <property name="text">
                  <string>0.0</string>
                 </property>

@@ -17,7 +17,7 @@ class CompressData(QtGui.QMainWindow):
         self.ui.comboBox_columnSelect.activated.connect(self.comboBox_columnSelect_activated)
 
         # The method from the worker object is used directly in the main GUI thread in this window
-        self.processRawDataWorkerInstance = workerobjects.ProcessRawDataWorker(self, 0) # TODO
+        self.processRawDataWorkerInstance = workerobjects.ProcessRawDataWorker(self, [0]) # TODO
 
     def pushButton_getDataFileSelect_clicked(self):
         if not os.path.exists("./Logfiles"):
@@ -49,7 +49,7 @@ class CompressData(QtGui.QMainWindow):
                     print "Could not find a corresponding cfg file"
             self.f = open(dataLoadFileSelected, 'rb')
             self.processRawDataWorkerInstance.rawData = self.f.read()
-            self.compressedData = self.processRawDataWorkerInstance.compressData()
+            self.compressedData = self.processRawDataWorkerInstance.compressData(self.columnSelect)
             # self.processRawDataWorkerInstance.rawData = self.processRawDataWorkerInstance.rawData[0:len(self.processRawDataWorkerInstance.rawData)/10]
             print len(self.processRawDataWorkerInstance.rawData)
             self.writeCompressedDataToDisk()
@@ -68,7 +68,7 @@ class CompressData(QtGui.QMainWindow):
 
     def comboBox_columnSelect_activated(self, index):
         self.columnSelect = index
-        self.processRawDataWorkerInstance.validColumns = index
+        self.processRawDataWorkerInstance.validColumns = [index]
 
     def writeCompressedDataToDisk(self):
         self.defaultDirectory = self.currentDirectoryName[:-1] + '_compressed/'

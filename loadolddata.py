@@ -46,10 +46,13 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         #self.RMSNoise_100kHz = 0
         #self.RMSNoise_1MHz = 0
         #self.RMSNoise_10MHz = 0
+        self.thresholdType = 0
         self.threshold = None
+        self.numberOfSigmas = None
+        self.sigma = None
+        self.baseline = None
         self.currentEvent = 1
         self.histogramModeSelect = 0
-        self.thresholdType = 0
 
         self.adcList = []
         for i in xrange(5):
@@ -131,7 +134,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         # Thread instantiation
         #######################################################################
         self.PSDThread = QtCore.QThread()
-        self.PSDWorkerInstance = workerobjects.PSDWorker(self)
+        self.PSDWorkerInstance = workerobjects.PSDWorker(self, [0])
         self.PSDWorkerInstance.moveToThread(self.PSDThread)
         self.PSDWorkerInstance.PSDReady.connect(self.displayData)
         self.PSDWorkerInstance.finished.connect(self.PSDThread.quit)
@@ -141,7 +144,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.PSDThread.started.connect(self.PSDWorkerInstance.calculatePSD)
 
         self.processRawDataThread = QtCore.QThread()
-        self.processRawDataWorkerInstance = workerobjects.ProcessRawDataWorker(self, 0) # TODO
+        self.processRawDataWorkerInstance = workerobjects.ProcessRawDataWorker(self, [0], self.PSDWorkerInstance, self.PSDThread) # TODO
         self.processRawDataWorkerInstance.moveToThread(self.processRawDataThread)
         self.processRawDataWorkerInstance.finished.connect(self.processRawDataThread.quit)
         self.processRawDataWorkerInstance.dataReady.connect(self.displayData)
@@ -190,7 +193,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         """Sets the column selection for the chip. Clears out data about the DC offset current when a column switch is initiated"""
         self.columnSelect = index
         self.processRawDataWorkerInstance.validColumns = [self.columnSelect]
-        self.PSDWorkerInstance.validColumn = self.columnSelect
+        self.PSDWorkerInstance.validColumns = [self.columnSelect]
         if ((self.columnSelect in [0,1]) and (True == self.masterDataInMemory)):
             self.processRawDataWorkerInstance.rawData = self.masterRawData
         elif ((self.columnSelect in [2,3,4]) and (True == self.slaveDataInMemory)):
@@ -202,6 +205,11 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.ui.lineEdit_totalEvents.setEnabled(False)
         self.ui.pushButton_previousEvent.setEnabled(False)
         self.ui.pushButton_nextEvent.setEnabled(False)
+        self.numberOfSigmas = None
+        self.sigma = None
+        self.baseline = None
+        self.threshold = None
+        self.lineEdit_threshold_editingFinished()
 
         if self.dataInMemory == 1:
             self.showProgressBar(10)
@@ -301,10 +309,18 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             # self.processRawDataWorkerInstance.rawData = self.processRawDataWorkerInstance.rawData[:-1]
             f.close() # Just in case
             self.dataInMemory = 1
+            self.removeAnalysis()
+            self.ui.tabWidget_plot.setTabEnabled(3, False)
+            self.ui.lineEdit_currentEvent.setEnabled(False)
+            self.ui.lineEdit_totalEvents.setEnabled(False)
+            self.ui.pushButton_previousEvent.setEnabled(False)
+            self.ui.pushButton_nextEvent.setEnabled(False)
+            self.numberOfSigmas = None
+            self.sigma = None
             self.baseline = None
-            # with open(dataLoadFileSelected, 'rb') as f:
-                # for line in f:
-                    # self.rawData = line
+            self.threshold = None
+            self.lineEdit_threshold_editingFinished()
+
             if (self.processRawDataThread.isRunning()):
                 self.processRawDataThread.quit()
                 self.processRawDataThread.wait()
@@ -370,13 +386,13 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             pass
 
     def updateDisplayData(self):
-        self.displayData(self.columnSelect)
+        self.displayData([self.columnSelect])
 
-    def displayData(self, column):
+    def displayData(self, columnList):
         """This method plots self.dataToDisplay from the worker thread that loads data from the file and processes it. The data being displayed is already a subsampled version of the full data. PyQtGraph then displays the data in the GUI."""
         self.start = time.clock()
-        if (True):
-            if (0 == self.ui.tabWidget_plot.currentIndex()):
+        for column in columnList:
+            if (0 == self.ui.tabWidget_plot.currentIndex() and [] != self.adcList[column].xDataToDisplay):
                 self.ui.graphicsView_time_plot.setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
                 if (self.ui.action_addVerticalMarker.isChecked() == True):
                     self.graphicsView_time_updateMarkerText()
@@ -413,8 +429,8 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                     self.ui.graphicsView_eventViewer_plotFit.setData(indexValuesToPlot[100:-101].astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate, numpy.hstack(self.meanEventValue[self.currentEvent-1]), pen='k', width=2)
                     self.ui.graphicsView_eventViewer_plotFit.setPen(self.eventFitColor[self.currentEvent-1])
                 # self.ui.graphicsView_eventViewer_plotFit.setData(indexValuesToPlot[500:1000].astype(numpy.float)/globalConstants.ADCSAMPLINGRATE, numpy.hstack(self.meanEventValue[self.currentEvent-1]), pen='k', width=2)
-            self.stop = time.clock()
-            # print "Main GUI thread took", self.stop-self.start, "s"
+        self.stop = time.clock()
+        # print "Main GUI thread took", self.stop-self.start, "s"
 
     def action_options_triggered(self):
         """Creates an options window"""
@@ -539,7 +555,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             self.ui.graphicsView_time.marker.x = 0
             self.ui.graphicsView_time.marker.sigPositionChanged.connect(self.graphicsView_time_updateMarkerText)
             self.ui.graphicsView_time.markerValue = pyqtgraph.TextItem('X=0\nY=0', anchor = (1,0), color='g')
-            self.ui.graphicsView_time.markerValue.setPos(len(self.adcList[self.columnSelect].yDataToDisplay)*globalConstants.SUBSAMPLINGFACTOR*1.0/globalConstants.ADCSAMPLINGRATE, numpy.max(self.adcList[self.columnSelect].yDataToDisplay))
+            self.ui.graphicsView_time.markerValue.setPos(len(self.adcList[self.columnSelect].yDataToDisplay)*globalConstants.SUBSAMPLINGFACTOR*1.0/globalConstants.ADCSAMPLINGRATE, numpy.max(self.adcList[self.columnSelect].yDataToDisplay)) # TODO I think this is already subsampled
             self.ui.graphicsView_time.addItem(self.ui.graphicsView_time.marker)
             self.ui.graphicsView_time.addItem(self.ui.graphicsView_time.markerValue)
 
@@ -560,7 +576,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         """Updates the labels at the top right of the plot whenever the marker is moved in the time view"""
         self.ui.graphicsView_time.marker.x = float(self.ui.graphicsView_time.marker.value())
         try:
-            self.ui.graphicsView_time.marker.y = self.adcList[self.columnSelect].yDataToDisplay[int(self.ui.graphicsView_time.marker.x/globalConstants.SUBSAMPLINGFACTOR*globalConstants.ADCSAMPLINGRATE)]
+            self.ui.graphicsView_time.marker.y = self.adcList[self.columnSelect].yDataToDisplay[int(self.ui.graphicsView_time.marker.x/globalConstants.SUBSAMPLINGFACTOR*globalConstants.ADCSAMPLINGRATE)] # TODO I think this is already subsampled
         except:
             self.ui.graphicsView_time.marker.y = 0
         self.ui.graphicsView_time.markerValue.setPlainText('X=' + '%.3E s' % self.ui.graphicsView_time.marker.x + '\nY=%.3E A' % self.ui.graphicsView_time.marker.y)
@@ -584,7 +600,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             self.ui.graphicsView_frequencyFit_plot = self.ui.graphicsView_frequency.plot(numpy.linspace(100, 10e6, 100), numpy.ones(100), pen='k', width=4)
             if (self.dataInMemory == 1):
                 self.adcList[self.columnSelect].psdFit = self.PSDWorkerInstance.createFit(self.adcList[self.columnSelect].f, self.adcList[self.columnSelect].psd, 5e6)
-                self.displayData(self.columnSelect)
+                self.displayData([self.columnSelect])
         else:
             self.ui.graphicsView_frequency.removeItem(self.ui.graphicsView_frequencyFit_plot)
 
@@ -673,7 +689,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.ui.lineEdit_currentEvent.setText(str(self.currentEvent))
         # Update event viewer tab
         if (3 == self.ui.tabWidget_plot.currentIndex()):
-            self.displayData(self.columnSelect)
+            self.displayData([self.columnSelect])
 
     def dwellTime_sigPointsClicked(self, item, points):
         """Looks up the point that was clicked in the dwell time histogram and opens it up in the event viewer tab"""
@@ -685,7 +701,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         """Changes the type of histogram showed - current blockage vs dwell time or current blockage vs count"""
         self.histogramModeSelect = index
         if (2 == self.ui.tabWidget_plot.currentIndex()):
-            self.displayData(self.columnSelect)
+            self.displayData([self.columnSelect])
 
     def comboBox_thresholdUnitsSelect_activated(self, index):
         self.thresholdType = index
@@ -699,10 +715,12 @@ class LoadOldDataWindow(QtGui.QMainWindow):
     def lineEdit_threshold_editingFinished(self):
         if (self.thresholdType == 0):
             self.numberOfSigmas = float(self.ui.lineEdit_threshold.text())
-            if (hasattr(self, 'sigma') and hasattr(self, 'baseline')):
+            #if (hasattr(self, 'sigma') and hasattr(self, 'baseline')):
+            if (None != self.sigma and None != self.baseline):
                 self.threshold = self.baseline - self.sigma * self.numberOfSigmas
         elif (self.thresholdType == 1):
-            if (hasattr(self, 'baseline')):
+            #if (hasattr(self, 'baseline')):
+            if (None != self.baseline):
                 self.threshold = self.baseline - float(self.ui.lineEdit_threshold.text())*1e-9
             else:
                 self.threshold = float(self.ui.lineEdit_threshold.text())*1e-9

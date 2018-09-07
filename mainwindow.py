@@ -318,9 +318,10 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.label_rowPlotIDCRelativeArray = [self.ui.label_rowPlotColumn0IDCRelative, self.ui.label_rowPlotColumn1IDCRelative, self.ui.label_rowPlotColumn2IDCRelative, self.ui.label_rowPlotColumn3IDCRelative, self.ui.label_rowPlotColumn4IDCRelative]
         self.ui.label_rowPlotIDCNetArray = [self.ui.label_rowPlotColumn0IDCNet, self.ui.label_rowPlotColumn1IDCNet, self.ui.label_rowPlotColumn2IDCNet, self.ui.label_rowPlotColumn3IDCNet, self.ui.label_rowPlotColumn4IDCNet]
 
+        self.ui.label_rowPlot10kHzNoiseArray = [self.ui.label_rowPlotColumn010kHzNoise, self.ui.label_rowPlotColumn110kHzNoise, self.ui.label_rowPlotColumn210kHzNoise, self.ui.label_rowPlotColumn310kHzNoise, self.ui.label_rowPlotColumn410kHzNoise]
         self.ui.label_rowPlot100kHzNoiseArray = [self.ui.label_rowPlotColumn0100kHzNoise, self.ui.label_rowPlotColumn1100kHzNoise, self.ui.label_rowPlotColumn2100kHzNoise, self.ui.label_rowPlotColumn3100kHzNoise, self.ui.label_rowPlotColumn4100kHzNoise]
         self.ui.label_rowPlot1MHzNoiseArray = [self.ui.label_rowPlotColumn01MHzNoise, self.ui.label_rowPlotColumn11MHzNoise, self.ui.label_rowPlotColumn21MHzNoise, self.ui.label_rowPlotColumn31MHzNoise, self.ui.label_rowPlotColumn41MHzNoise]
-        self.ui.label_rowPlot10MHzNoiseArray = [self.ui.label_rowPlotColumn010MHzNoise, self.ui.label_rowPlotColumn110MHzNoise, self.ui.label_rowPlotColumn210MHzNoise, self.ui.label_rowPlotColumn310MHzNoise, self.ui.label_rowPlotColumn410MHzNoise]
+        # self.ui.label_rowPlot10MHzNoiseArray = [self.ui.label_rowPlotColumn010MHzNoise, self.ui.label_rowPlotColumn110MHzNoise, self.ui.label_rowPlotColumn210MHzNoise, self.ui.label_rowPlotColumn310MHzNoise, self.ui.label_rowPlotColumn410MHzNoise]
 
         self.ui.pushButton_rowPlotIDCSetOffsetArray = [self.ui.pushButton_rowPlotColumn0IDCSetOffset, self.ui.pushButton_rowPlotColumn1IDCSetOffset, self.ui.pushButton_rowPlotColumn2IDCSetOffset, self.ui.pushButton_rowPlotColumn3IDCSetOffset, self.ui.pushButton_rowPlotColumn4IDCSetOffset]
         self.ui.pushButton_rowPlotColumn0IDCSetOffset.clicked.connect(lambda: self.pushButton_rowPlotIDCSetOffset_clicked(column=0))
@@ -501,11 +502,13 @@ class MainWindow(QtGui.QMainWindow):
         try:
             # self.FPGAMasterInstance.initializeDevice('Bitfiles/top_40M222.bit')
             # self.FPGAMasterInstance.initializeDevice('Bitfiles/top_40M22_integratorReset1.bit')
+            # self.FPGAMasterInstance.initializeDevice('Bitfiles/top_CNP2V2_master.bit')
             self.FPGAMasterInstance.initializeDevice('Bitfiles/top_CNP2V3_master.bit')
         except:
             print "Failed to program Master FPGA"
         try:
             # self.FPGASlaveInstance.initializeDevice('Bitfiles/top_slave_test.bit')
+            # self.FPGASlaveInstance.initializeDevice('Bitfiles/top_CNP2V2_slave.bit')
             self.FPGASlaveInstance.initializeDevice('Bitfiles/top_CNP2V3_slave.bit')
         except:
             print "Failed to program Slave FPGA"
@@ -529,32 +532,52 @@ class MainWindow(QtGui.QMainWindow):
         #######################################################################
         # Thread instantiation
         #######################################################################
-        self.PSDThread = QtCore.QThread()
-        self.PSDWorkerInstance = workerobjects.PSDWorker(self)
-        self.PSDWorkerInstance.moveToThread(self.PSDThread)
-        #self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewSingleChannelPlot)
-        #self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewRowPlot)
-        self.PSDWorkerInstance.finished.connect(self.PSDThread.quit)
-        self.PSDWorkerInstance.finished.connect(self.updateNoiseLabels)
-        self.PSDWorkerInstance.finished.connect(self.updateIDCLabels)
-        self.PSDThread.started.connect(self.PSDWorkerInstance.calculatePSD)
+        # self.PSDThread = QtCore.QThread()
+        # self.PSDWorkerInstance = workerobjects.PSDWorker(self)
+        # self.PSDWorkerInstance.moveToThread(self.PSDThread)
+        # # self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewSingleChannelPlot)
+        # # self.PSDWorkerInstance.PSDReady.connect(self.displayLivePreviewRowPlot)
+        # self.PSDWorkerInstance.finished.connect(self.PSDThread.quit)
+        # self.PSDWorkerInstance.finished.connect(self.updateNoiseLabels)
+        # self.PSDWorkerInstance.finished.connect(self.updateIDCLabels)
+        # self.PSDThread.started.connect(self.PSDWorkerInstance.calculatePSD)
 
+        self.PSDMasterThread = QtCore.QThread()
+        self.PSDMasterWorkerInstance = workerobjects.PSDWorker(self, self.FPGAMasterInstance.validColumns)
+        self.PSDMasterWorkerInstance.moveToThread(self.PSDMasterThread)
+        #self.PSDMasterWorkerInstance.PSDReady.connect(self.displayLivePreviewSingleChannelPlot)
+        #self.PSDMasterWorkerInstance.PSDReady.connect(self.displayLivePreviewRowPlot)
+        self.PSDMasterWorkerInstance.finished.connect(self.PSDMasterThread.quit)
+        self.PSDMasterWorkerInstance.finished.connect(self.updateNoiseLabels)
+        self.PSDMasterWorkerInstance.finished.connect(self.updateIDCLabels)
+        self.PSDMasterThread.started.connect(self.PSDMasterWorkerInstance.calculatePSD)
+        
+        self.PSDSlaveThread = QtCore.QThread()
+        self.PSDSlaveWorkerInstance = workerobjects.PSDWorker(self, self.FPGASlaveInstance.validColumns)
+        self.PSDSlaveWorkerInstance.moveToThread(self.PSDSlaveThread)
+        #self.PSDSlaveWorkerInstance.PSDReady.connect(self.displayLivePreviewSingleChannelPlot)
+        #self.PSDSlaveWorkerInstance.PSDReady.connect(self.displayLivePreviewRowPlot)
+        self.PSDSlaveWorkerInstance.finished.connect(self.PSDSlaveThread.quit)
+        self.PSDSlaveWorkerInstance.finished.connect(self.updateNoiseLabels)
+        self.PSDSlaveWorkerInstance.finished.connect(self.updateIDCLabels)
+        self.PSDSlaveThread.started.connect(self.PSDSlaveWorkerInstance.calculatePSD)
+        
         self.processRawDataADCMasterThread = QtCore.QThread()
-        self.processRawDataADCMasterWorkerInstance = workerobjects.ProcessRawDataWorker(self, [0, 1])
+        self.processRawDataADCMasterWorkerInstance = workerobjects.ProcessRawDataWorker(self, self.FPGAMasterInstance.validColumns, self.PSDMasterWorkerInstance, self.PSDMasterThread)
         self.processRawDataADCMasterWorkerInstance.moveToThread(self.processRawDataADCMasterThread)
         self.processRawDataADCMasterWorkerInstance.finished.connect(self.processRawDataADCMasterThread.quit)
         self.processRawDataADCMasterWorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADCMasterWorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
-        self.processRawDataADCMasterWorkerInstance.startPSDThread.connect(self.PSDThread.start)
+        self.processRawDataADCMasterWorkerInstance.startPSDThread.connect(self.PSDMasterThread.start)
         self.processRawDataADCMasterThread.started.connect(self.processRawDataADCMasterWorkerInstance.processRawData)
 
         self.processRawDataADCSlaveThread = QtCore.QThread()
-        self.processRawDataADCSlaveWorkerInstance = workerobjects.ProcessRawDataWorker(self, [2, 3, 4])
+        self.processRawDataADCSlaveWorkerInstance = workerobjects.ProcessRawDataWorker(self, self.FPGASlaveInstance.validColumns, self.PSDSlaveWorkerInstance, self.PSDSlaveThread)
         self.processRawDataADCSlaveWorkerInstance.moveToThread(self.processRawDataADCSlaveThread)
         self.processRawDataADCSlaveWorkerInstance.finished.connect(self.processRawDataADCSlaveThread.quit)
         self.processRawDataADCSlaveWorkerInstance.dataReady.connect(self.displayLivePreviewSingleChannelPlot)
         self.processRawDataADCSlaveWorkerInstance.dataReady.connect(self.displayLivePreviewRowPlot)
-        self.processRawDataADCSlaveWorkerInstance.startPSDThread.connect(self.PSDThread.start)
+        self.processRawDataADCSlaveWorkerInstance.startPSDThread.connect(self.PSDSlaveThread.start)
         self.processRawDataADCSlaveThread.started.connect(self.processRawDataADCSlaveWorkerInstance.processRawData)
 
         # self.processRawDataADC2Thread = QtCore.QThread()
@@ -640,8 +663,10 @@ class MainWindow(QtGui.QMainWindow):
         self.processRawDataADCMasterThread.wait()
         self.processRawDataADCSlaveThread.quit()
         self.processRawDataADCSlaveThread.wait()
-        self.PSDThread.quit()
-        self.PSDThread.wait()
+        self.PSDMasterThread.quit()
+        self.PSDMasterThread.wait()
+        self.PSDSlaveThread.quit()
+        self.PSDSlaveThread.wait()
         self.writeToMasterLogFileThread.quit()
         self.writeToMasterLogFileThread.wait()
         self.writeToSlaveLogFileThread.quit()
@@ -1142,48 +1167,49 @@ class MainWindow(QtGui.QMainWindow):
                 if (self.writeToSlaveLogFileWorkerInstance.rawData.qsize() > 0 and not self.writeToSlaveLogFileThread.isRunning()):
                     self.writeToSlaveLogFileThread.start()
 
-    def displayLivePreviewSingleChannelPlot(self, column):
+    def displayLivePreviewSingleChannelPlot(self, columnList):
         """This method plots self.dataToDisplay from the worker thread that gets data from the FPGA and processes it. The data being displayed is already a subsampled version of the full data. PyQtGraph then displays the data in the GUI."""
         self.start = time.clock()
-        currentIndex = self.ui.tabWidget_plot.currentIndex()
-
-        if (self.ui.action_enableLivePreview.isChecked() and column == self.columnSelect):
-            if (0 == currentIndex):
-                self.ui.graphicsView_time_plot.setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
-                if (self.ui.action_addVerticalMarker.isChecked() == True):
-                    self.graphicsView_time_updateMarkerText()
-            elif (1 == currentIndex and 0 not in self.adcList[column].psd):
-                self.ui.graphicsView_frequency_plot.setData(self.adcList[column].f, self.adcList[column].psd)
-                if (self.ui.action_addVerticalMarker.isChecked() == True):
-                    self.graphicsView_frequency_updateMarkerText()
-                if (self.ui.action_addNoiseFit.isChecked() == True and hasattr(self.adcList[column], 'psdFit')):
-                    self.ui.graphicsView_frequencyFit_plot.setData(self.adcList[column].f, self.adcList[column].psdFit)
-            elif (2 == currentIndex):
-                self.ui.graphicsView_histogram_plot.setData(self.adcList[column].histogramView, self.adcList[column].bins[0:len(self.adcList[column].bins)-1] + (self.adcList[column].bins[1]-self.adcList[column].bins[0])/2)
-            elif (3 == currentIndex):
-                if self.adcList[column].ivData_voltage != []:
-                    self.ui.graphicsView_IV_plot.setData(self.adcList[column].ivData_voltage, self.adcList[column].ivData_current)
-                    self.ui.graphicsView_IV_currentPoint.setData([self.adcList[column].ivData_voltage[-1]], [self.adcList[column].ivData_current[-1]])
+        if self.columnSelect in columnList:
+            currentIndex = self.ui.tabWidget_plot.currentIndex()
+            if self.ui.action_enableLivePreview.isChecked():
+                if (0 == currentIndex):
+                    self.ui.graphicsView_time_plot.setData(self.adcList[self.columnSelect].xDataToDisplay, self.adcList[self.columnSelect].yDataToDisplay)
+                    if (self.ui.action_addVerticalMarker.isChecked() == True):
+                        self.graphicsView_time_updateMarkerText()
+                elif (1 == currentIndex and 0 not in self.adcList[self.columnSelect].psd):
+                    self.ui.graphicsView_frequency_plot.setData(self.adcList[self.columnSelect].f, self.adcList[self.columnSelect].psd)
+                    if (self.ui.action_addVerticalMarker.isChecked() == True):
+                        self.graphicsView_frequency_updateMarkerText()
+                    if (self.ui.action_addNoiseFit.isChecked() == True and hasattr(self.adcList[self.columnSelect], 'psdFit')):
+                        self.ui.graphicsView_frequencyFit_plot.setData(self.adcList[self.columnSelect].f, self.adcList[self.columnSelect].psdFit)
+                elif (2 == currentIndex):
+                    self.ui.graphicsView_histogram_plot.setData(self.adcList[self.columnSelect].histogramView, self.adcList[self.columnSelect].bins[0:len(self.adcList[self.columnSelect].bins)-1] + (self.adcList[self.columnSelect].bins[1]-self.adcList[self.columnSelect].bins[0])/2)
+                elif (3 == currentIndex):
+                    if self.adcList[self.columnSelect].ivData_voltage != []:
+                        self.ui.graphicsView_IV_plot.setData(self.adcList[self.columnSelect].ivData_voltage, self.adcList[self.columnSelect].ivData_current)
+                        self.ui.graphicsView_IV_currentPoint.setData([self.adcList[self.columnSelect].ivData_voltage[-1]], [self.adcList[self.columnSelect].ivData_current[-1]])
             self.stop = time.clock()
             # print "Main GUI thread took", self.stop-self.start, "s"
 
-    def displayLivePreviewRowPlot(self, column):
+    def displayLivePreviewRowPlot(self, columnList):
         """This method plots self.dataToDisplay from the worker thread that gets data from the FPGA and processes it. The data being displayed is already a subsampled version of the full data. PyQtGraph then displays the data in the GUI."""
         self.start = time.clock()
         currentIndex = self.ui.tabWidget_rowPlot.currentIndex()
-
-        if ((self.ui.action_enableLivePreview.isChecked() and self.ui.checkBox_rowPlotPlotsDisplay.isChecked())):
-            if (0 == currentIndex):
-                self.ui.rowPlot_time_columnPlotArray[column].setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
-            elif (1 == currentIndex and 0 not in self.adcList[column].psd):
-                self.ui.rowPlot_frequency_columnPlotArray[column].setData(self.adcList[column].f, self.adcList[column].psd)
-            elif (2 == currentIndex):
-                self.ui.rowPlot_histogram_columnPlotArray[column].setData(self.adcList[column].histogramView, self.adcList[column].bins[0:len(self.adcList[column].bins)-1] + (self.adcList[column].bins[1]-self.adcList[column].bins[0])/2)
-            elif (3 == currentIndex):
-                if self.adcList[column].ivData_voltage != []:
-                    self.ui.rowPlot_IV_columnPlotArray[column].setData(self.adcList[column].ivData_voltage, self.adcList[column].ivData_current)
-            self.stop = time.clock()
-            # print "Main GUI thread took", self.stop-self.start, "s"
+        
+        for column in columnList:
+            if ((self.ui.action_enableLivePreview.isChecked() and self.ui.checkBox_rowPlotPlotsDisplay.isChecked())):
+                if (0 == currentIndex):
+                    self.ui.rowPlot_time_columnPlotArray[column].setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
+                elif (1 == currentIndex and 0 not in self.adcList[column].psd):
+                    self.ui.rowPlot_frequency_columnPlotArray[column].setData(self.adcList[column].f, self.adcList[column].psd)
+                elif (2 == currentIndex):
+                    self.ui.rowPlot_histogram_columnPlotArray[column].setData(self.adcList[column].histogramView, self.adcList[column].bins[0:len(self.adcList[column].bins)-1] + (self.adcList[column].bins[1]-self.adcList[column].bins[0])/2)
+                elif (3 == currentIndex):
+                    if self.adcList[column].ivData_voltage != []:
+                        self.ui.rowPlot_IV_columnPlotArray[column].setData(self.adcList[column].ivData_voltage, self.adcList[column].ivData_current)
+                self.stop = time.clock()
+                # print "Main GUI thread took", self.stop-self.start, "s"
 
     def updateReferenceelectrodePotential(self, value=0.0):
         """Updates the reference electrode potential. This is called once at the start of the program to set the reference potential to 900mV and subsequently everytime the counter electrode is set to 0 relative potential."""
@@ -1267,15 +1293,15 @@ class MainWindow(QtGui.QMainWindow):
 
     def updateNoiseLabels(self):
         """Update labels on the GUI indicating the integrated noise values at 100 kHz, 1 MHz and 10 MHz bandwidths"""
+        self.ui.label_10kHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_10kHz))
         self.ui.label_100kHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_100kHz))
         self.ui.label_1MHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_1MHz))
-        self.ui.label_10MHzNoise.setText(str(self.adcList[self.columnSelect].rmsNoise_10MHz))
 
         if (hasattr(self.ui, 'verticalWidget_rowPlotData') and self.ui.checkBox_rowPlotDataDisplay.isChecked() == True):
             for column in xrange(5):
+                self.ui.label_rowPlot10kHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_10kHz))
                 self.ui.label_rowPlot100kHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_100kHz))
                 self.ui.label_rowPlot1MHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_1MHz))
-                self.ui.label_rowPlot10MHzNoiseArray[column].setText(str(self.adcList[column].rmsNoise_10MHz))
 
     def label_bufferUtilizationUpdate(self):
         """Update label on the GUI indicating RAM utilization on the FPGA that is acquiring the data currently being displayed"""
@@ -1571,7 +1597,7 @@ class MainWindow(QtGui.QMainWindow):
         """Updates the labels at the top right of the plot whenever the marker is moved in the time view"""
         self.ui.graphicsView_time.marker.x = float(self.ui.graphicsView_time.marker.value())
         try:
-            self.ui.graphicsView_time.marker.y = self.adcList[self.columnSelect].yDataToDisplay[int(self.ui.graphicsView_time.marker.x/globalConstants.SUBSAMPLINGFACTOR*globalConstants.ADCSAMPLINGRATE)]
+            self.ui.graphicsView_time.marker.y = self.adcList[self.columnSelect].yDataToDisplay[int(self.ui.graphicsView_time.marker.x/globalConstants.SUBSAMPLINGFACTOR*globalConstants.ADCSAMPLINGRATE)] # TODO I think this is already subsampled
         except:
             self.ui.graphicsView_time.marker.y = 0
         self.ui.graphicsView_time.markerValue.setPlainText('X=' + '%.3E s' % self.ui.graphicsView_time.marker.x + '\nY=%.3E A' % self.ui.graphicsView_time.marker.y)
