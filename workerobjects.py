@@ -48,7 +48,7 @@ class PSDWorker(QtCore.QObject):
             # if (window.columnSelect in [0, 3]):
                 # self.ADCData *= 16.0/5
             self.parentWindow.adcList[column].histogramView, self.parentWindow.adcList[column].bins = numpy.histogram(self.ADCData[column], bins=64)
-            self.parentWindow.adcList[column].bins /= (globalConstants.AAFILTERGAIN*self.parentWindow.RDCFB)
+            self.parentWindow.adcList[column].bins /= (globalConstants.AAFILTERGAIN*self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb)
             self.parentWindow.adcList[column].bins -= self.parentWindow.adcList[column].idcOffset
             #self.histogramReady.emit() # TODO
             self.progress.emit(2, 'Calculating PSD')
@@ -92,7 +92,7 @@ class PSDWorker(QtCore.QObject):
             if (self.parentWindow.ui.action_addNoiseFit.isChecked() == True): # TODO
                 self.parentWindow.adcList[column].psdFit = self.createFit(self.parentWindow.adcList[column].f, self.parentWindow.adcList[column].psd, 1e6)
 
-            rmsNoise = numpy.sqrt(scipy.integrate.cumtrapz(Pxx, f, initial=0))/globalConstants.AAFILTERGAIN/self.parentWindow.RDCFB
+            rmsNoise = numpy.sqrt(scipy.integrate.cumtrapz(Pxx, f, initial=0))/globalConstants.AAFILTERGAIN/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb
             self.parentWindow.adcList[column].rmsNoise = rmsNoise[logIndices-1]
 
             self.parentWindow.adcList[column].rmsNoise_10kHz = numpy.round(rmsNoise[f_10kHz-1] * 10**12, 1)
@@ -108,14 +108,14 @@ class PSDWorker(QtCore.QObject):
 
     def calculateDCResistance(self, column):
         self.adcDataRMS[column] = numpy.sqrt(numpy.mean(numpy.power(self.ADCData[column], 2)))
-        self.adcList[column].poreResistance = globalConstants.SQUAREWAVEAMPLITUDE/self.adcDataRMS[column]*globalConstants.AAFILTERGAIN*self.parentWindow.RDCFB
+        self.adcList[column].poreResistance = globalConstants.SQUAREWAVEAMPLITUDE/self.adcDataRMS[column]*globalConstants.AAFILTERGAIN*self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb
         self.parentWindow.ui.label_poreResistance.setText(str(numpy.round(self.adcList[column].poreResistance/1e6, 1)) + u"MΩ") # TODO
 
     def createFit(self, fFit, PSDFit, maxFitFrequency = 6e6):
         fFitNew = fFit[fFit < maxFitFrequency]
         PSDFitNew = PSDFit[fFit < maxFitFrequency]
         fitCoefficients = numpy.polynomial.polynomial.polyfit(fFitNew, PSDFitNew * fFitNew, 3, w = 1/(fFitNew * PSDFitNew)) #Fit PSD*f to 3rd order and then divide by f to get the 1/f term also
-        print numpy.sqrt(fitCoefficients[3])/(2*3.14*3.15e-9*self.parentWindow.RDCFB*globalConstants.AAFILTERGAIN)
+        print numpy.sqrt(fitCoefficients[3])/(2*3.14*3.15e-9*self.parentWindow.adcList[self.parentWindow.columnSelect].amplifierList[self.parentWindow.rowSelect].rdcfb*globalConstants.AAFILTERGAIN)
         return numpy.divide(numpy.polynomial.polynomial.polyval(fFit, fitCoefficients), fFit)
 
 
@@ -285,13 +285,13 @@ class ProcessRawDataWorker(QtCore.QObject):
                 #         self.numba_garrote(waveletCoefficients[i][1], threshold)
                 #     ADCData = pywt.iswt(waveletCoefficients, self.motherWavelet)
                 # totalNoise = numpy.std(ADCData2[len(ADCData2)/2:])
-                # print totalNoise/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN
+                # print totalNoise/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN
                 # tags = ADCData < -5*totalNoise
-                # print totalNoise/self.parentWindow.RDCFB, numpy.sum(numpy.bitwise_and(numpy.bitwise_and(tags[:-3], tags[1:-2]), numpy.bitwise_and(tags[2:-1], tags[3:])))
+                # print totalNoise/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb, numpy.sum(numpy.bitwise_and(numpy.bitwise_and(tags[:-3], tags[1:-2]), numpy.bitwise_and(tags[2:-1], tags[3:])))
 
                 ADCData[column] = ADCData[column][self.skipPoints:]
                 if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')): #TODO
-                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[column][::self.skipPoints/4]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[column][::self.skipPoints/4]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
                     self.parentWindow.analyzeDataWorkerInstance.effectiveSamplingRate = globalConstants.ADCSAMPLINGRATE/self.skipPoints*4
             else:
                 #ADCData[:-1] += numpy.diff(ADCData)/(2*numpy.pi*2.5e6/globalConstants.ADCSAMPLINGRATE)
@@ -314,12 +314,12 @@ class ProcessRawDataWorker(QtCore.QObject):
                 #     ADCData = pywt.iswt(waveletCoefficients, self.motherWavelet)
                 #     print "ISWT complete"
                 #     if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
-                #         self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[self.validColumn].idcOffset
+                #         self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[self.validColumn].idcOffset
 
                 if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
-                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[column][:]/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[column][:]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
 
-            self.parentWindow.adcList[column].idcRelative = numpy.mean(ADCData[column])*1.0/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+            self.parentWindow.adcList[column].idcRelative = numpy.mean(ADCData[column])*1.0/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
             self.progress.emit(1, 'Finished calculating data to display')
 
             # self.parentWindow.adcList[column].adcData = ADCData[column] # I never use this
@@ -327,7 +327,7 @@ class ProcessRawDataWorker(QtCore.QObject):
             if (hasattr(self.parentWindow.ui, 'action_enableLivePreview') and self.parentWindow.ui.action_enableLivePreview.isChecked() == False):
                 pass
             else:
-                self.parentWindow.adcList[column].yDataToDisplay = (ADCData[column][::globalConstants.SUBSAMPLINGFACTOR]*1.0/self.parentWindow.RDCFB/globalConstants.AAFILTERGAIN) - self.parentWindow.adcList[column].idcOffset #Prefixes (like nano or pico) are handled automatically by PyQtGraph
+                self.parentWindow.adcList[column].yDataToDisplay = (ADCData[column][::globalConstants.SUBSAMPLINGFACTOR]*1.0/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN) - self.parentWindow.adcList[column].idcOffset #Prefixes (like nano or pico) are handled automatically by PyQtGraph
                 self.parentWindow.adcList[column].xDataToDisplay = numpy.linspace(0, len(self.parentWindow.adcList[column].yDataToDisplay) * globalConstants.SUBSAMPLINGFACTOR * 1.0 / globalConstants.ADCSAMPLINGRATE, len(self.parentWindow.adcList[column].yDataToDisplay))
             
             
@@ -619,7 +619,7 @@ class AnalyzeDataWorker(QtCore.QObject):
         self.parentWindow.meanDeltaI = self.meanDeltaI
         self.parentWindow.dwellTime = numpy.reshape(self.dwellTime, (len(self.dwellTime), 1))
         # self.parentWindow.PSDWorkerInstance.needsScaling = True
-        # self.parentWindow.PSDWorkerInstance.ADCData = self.rawData2[self.rawData >= self.baseline - self.sigma*5]*self.parentWindow.RDCFB*globalConstants.AAFILTERGAIN
+        # self.parentWindow.PSDWorkerInstance.ADCData = self.rawData2[self.rawData >= self.baseline - self.sigma*5]*self.parentWindow.adcList[self.parentWindow.columnSelect].amplifierList[self.parentWindow.rowSelect].rdcfb*globalConstants.AAFILTERGAIN
         # self.parentWindow.PSDThread.start()
 
         # self.parentWindow.meanEventValue = self.meanEventValue

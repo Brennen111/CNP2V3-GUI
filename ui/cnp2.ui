@@ -76,7 +76,7 @@
         <property name="minimumSize">
          <size>
           <width>700</width>
-          <height>700</height>
+          <height>675</height>
          </size>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_37">
@@ -130,6 +130,19 @@
               <property name="rightMargin">
                <number>0</number>
               </property>
+              <item>
+               <spacer name="verticalSpacer_14">
+                <property name="orientation">
+                 <enum>Qt::Vertical</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>0</width>
+                  <height>0</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
               <item>
                <spacer name="verticalSpacer">
                 <property name="orientation">
@@ -786,75 +799,6 @@
                       <enum>QLayout::SetFixedSize</enum>
                      </property>
                      <item>
-                      <layout class="QVBoxLayout" name="verticalLayout_12">
-                       <property name="spacing">
-                        <number>0</number>
-                       </property>
-                       <item>
-                        <widget class="QLabel" name="label_14">
-                         <property name="text">
-                          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:600;&quot;&gt;R&lt;/span&gt;&lt;span style=&quot; font-size:10pt; font-weight:600; vertical-align:sub;&quot;&gt;DCFB &lt;/span&gt;&lt;span style=&quot; font-size:10pt; font-weight:600;&quot;&gt;(M&amp;Omega;)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                         </property>
-                         <property name="alignment">
-                          <set>Qt::AlignCenter</set>
-                         </property>
-                        </widget>
-                       </item>
-                       <item>
-                        <layout class="QHBoxLayout" name="horizontalLayout_14">
-                         <property name="spacing">
-                          <number>6</number>
-                         </property>
-                         <item>
-                          <spacer name="horizontalSpacer_14">
-                           <property name="orientation">
-                            <enum>Qt::Horizontal</enum>
-                           </property>
-                           <property name="sizeHint" stdset="0">
-                            <size>
-                             <width>0</width>
-                             <height>0</height>
-                            </size>
-                           </property>
-                          </spacer>
-                         </item>
-                         <item>
-                          <widget class="QLineEdit" name="lineEdit_RDCFB">
-                           <property name="sizePolicy">
-                            <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
-                             <horstretch>0</horstretch>
-                             <verstretch>1</verstretch>
-                            </sizepolicy>
-                           </property>
-                           <property name="maximumSize">
-                            <size>
-                             <width>40</width>
-                             <height>16777215</height>
-                            </size>
-                           </property>
-                           <property name="alignment">
-                            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                           </property>
-                          </widget>
-                         </item>
-                         <item>
-                          <spacer name="horizontalSpacer_15">
-                           <property name="orientation">
-                            <enum>Qt::Horizontal</enum>
-                           </property>
-                           <property name="sizeHint" stdset="0">
-                            <size>
-                             <width>0</width>
-                             <height>0</height>
-                            </size>
-                           </property>
-                          </spacer>
-                         </item>
-                        </layout>
-                       </item>
-                      </layout>
-                     </item>
-                     <item>
                       <layout class="QVBoxLayout" name="verticalLayout_11">
                        <property name="spacing">
                         <number>0</number>
@@ -1150,461 +1094,11 @@
                 </property>
                 <property name="sizeHint" stdset="0">
                  <size>
-                  <width>20</width>
-                  <height>40</height>
-                 </size>
-                </property>
-               </spacer>
-              </item>
-              <item>
-               <spacer name="verticalSpacer_2">
-                <property name="orientation">
-                 <enum>Qt::Vertical</enum>
-                </property>
-                <property name="sizeType">
-                 <enum>QSizePolicy::Expanding</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
                   <width>0</width>
                   <height>0</height>
                  </size>
                 </property>
                </spacer>
-              </item>
-              <item>
-               <widget class="QGroupBox" name="groupBox_ConfigCalibration">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="maximumSize">
-                 <size>
-                  <width>16777215</width>
-                  <height>16777215</height>
-                 </size>
-                </property>
-                <property name="title">
-                 <string>Config/Calibration</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignCenter</set>
-                </property>
-                <layout class="QVBoxLayout" name="verticalLayout_21">
-                 <property name="spacing">
-                  <number>3</number>
-                 </property>
-                 <property name="leftMargin">
-                  <number>6</number>
-                 </property>
-                 <property name="topMargin">
-                  <number>6</number>
-                 </property>
-                 <property name="rightMargin">
-                  <number>6</number>
-                 </property>
-                 <property name="bottomMargin">
-                  <number>6</number>
-                 </property>
-                 <item>
-                  <layout class="QHBoxLayout" name="horizontalLayout_27">
-                   <property name="topMargin">
-                    <number>0</number>
-                   </property>
-                   <property name="rightMargin">
-                    <number>0</number>
-                   </property>
-                   <item>
-                    <widget class="QLabel" name="label_15">
-                     <property name="text">
-                      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:600;&quot;&gt;R&lt;/span&gt;&lt;span style=&quot; font-size:10pt; font-weight:600; vertical-align:sub;&quot;&gt;DCFB &lt;/span&gt;&lt;span style=&quot; font-size:10pt; font-weight:600;&quot;&gt;(M&amp;Omega;)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                     </property>
-                     <property name="alignment">
-                      <set>Qt::AlignCenter</set>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <layout class="QVBoxLayout" name="verticalLayout_5">
-                     <property name="spacing">
-                      <number>0</number>
-                     </property>
-                     <property name="rightMargin">
-                      <number>0</number>
-                     </property>
-                     <item>
-                      <widget class="QLabel" name="label_6">
-                       <property name="text">
-                        <string>Column 0</string>
-                       </property>
-                       <property name="alignment">
-                        <set>Qt::AlignCenter</set>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <layout class="QHBoxLayout" name="horizontalLayout_19">
-                       <property name="spacing">
-                        <number>0</number>
-                       </property>
-                       <item>
-                        <spacer name="horizontalSpacer_22">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                       <item>
-                        <widget class="QLineEdit" name="lineEdit_RDCFB_Column0">
-                         <property name="sizePolicy">
-                          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                           <horstretch>0</horstretch>
-                           <verstretch>0</verstretch>
-                          </sizepolicy>
-                         </property>
-                         <property name="maximumSize">
-                          <size>
-                           <width>45</width>
-                           <height>16777215</height>
-                          </size>
-                         </property>
-                         <property name="alignment">
-                          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                         </property>
-                        </widget>
-                       </item>
-                       <item>
-                        <spacer name="horizontalSpacer_23">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                      </layout>
-                     </item>
-                    </layout>
-                   </item>
-                   <item>
-                    <layout class="QVBoxLayout" name="verticalLayout_36">
-                     <property name="spacing">
-                      <number>0</number>
-                     </property>
-                     <property name="rightMargin">
-                      <number>0</number>
-                     </property>
-                     <item>
-                      <widget class="QLabel" name="label_53">
-                       <property name="text">
-                        <string>Column 1</string>
-                       </property>
-                       <property name="alignment">
-                        <set>Qt::AlignCenter</set>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <layout class="QHBoxLayout" name="horizontalLayout_33">
-                       <property name="spacing">
-                        <number>0</number>
-                       </property>
-                       <property name="topMargin">
-                        <number>0</number>
-                       </property>
-                       <property name="rightMargin">
-                        <number>0</number>
-                       </property>
-                       <item>
-                        <spacer name="horizontalSpacer_24">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                       <item>
-                        <widget class="QLineEdit" name="lineEdit_RDCFB_Column1">
-                         <property name="sizePolicy">
-                          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                           <horstretch>0</horstretch>
-                           <verstretch>0</verstretch>
-                          </sizepolicy>
-                         </property>
-                         <property name="maximumSize">
-                          <size>
-                           <width>45</width>
-                           <height>16777215</height>
-                          </size>
-                         </property>
-                         <property name="alignment">
-                          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                         </property>
-                        </widget>
-                       </item>
-                       <item>
-                        <spacer name="horizontalSpacer_25">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                      </layout>
-                     </item>
-                    </layout>
-                   </item>
-                   <item>
-                    <layout class="QVBoxLayout" name="verticalLayout_39">
-                     <property name="spacing">
-                      <number>0</number>
-                     </property>
-                     <property name="rightMargin">
-                      <number>0</number>
-                     </property>
-                     <item>
-                      <widget class="QLabel" name="label_54">
-                       <property name="text">
-                        <string>Column 2</string>
-                       </property>
-                       <property name="alignment">
-                        <set>Qt::AlignCenter</set>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <layout class="QHBoxLayout" name="horizontalLayout_34" stretch="0,0,0">
-                       <property name="spacing">
-                        <number>0</number>
-                       </property>
-                       <property name="topMargin">
-                        <number>0</number>
-                       </property>
-                       <item>
-                        <spacer name="horizontalSpacer_26">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                       <item>
-                        <widget class="QLineEdit" name="lineEdit_RDCFB_Column2">
-                         <property name="sizePolicy">
-                          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                           <horstretch>0</horstretch>
-                           <verstretch>0</verstretch>
-                          </sizepolicy>
-                         </property>
-                         <property name="maximumSize">
-                          <size>
-                           <width>45</width>
-                           <height>16777215</height>
-                          </size>
-                         </property>
-                         <property name="alignment">
-                          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                         </property>
-                        </widget>
-                       </item>
-                       <item>
-                        <spacer name="horizontalSpacer_29">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                      </layout>
-                     </item>
-                    </layout>
-                   </item>
-                   <item>
-                    <layout class="QVBoxLayout" name="verticalLayout_40">
-                     <property name="spacing">
-                      <number>0</number>
-                     </property>
-                     <property name="rightMargin">
-                      <number>0</number>
-                     </property>
-                     <item>
-                      <widget class="QLabel" name="label_55">
-                       <property name="text">
-                        <string>Column 3</string>
-                       </property>
-                       <property name="alignment">
-                        <set>Qt::AlignCenter</set>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <layout class="QHBoxLayout" name="horizontalLayout_35">
-                       <property name="spacing">
-                        <number>0</number>
-                       </property>
-                       <property name="topMargin">
-                        <number>0</number>
-                       </property>
-                       <item>
-                        <spacer name="horizontalSpacer_30">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                       <item>
-                        <widget class="QLineEdit" name="lineEdit_RDCFB_Column3">
-                         <property name="sizePolicy">
-                          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-                           <horstretch>0</horstretch>
-                           <verstretch>0</verstretch>
-                          </sizepolicy>
-                         </property>
-                         <property name="maximumSize">
-                          <size>
-                           <width>45</width>
-                           <height>16777215</height>
-                          </size>
-                         </property>
-                         <property name="alignment">
-                          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                         </property>
-                        </widget>
-                       </item>
-                       <item>
-                        <spacer name="horizontalSpacer_31">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                      </layout>
-                     </item>
-                    </layout>
-                   </item>
-                   <item>
-                    <layout class="QVBoxLayout" name="verticalLayout_41">
-                     <property name="spacing">
-                      <number>0</number>
-                     </property>
-                     <property name="rightMargin">
-                      <number>0</number>
-                     </property>
-                     <item>
-                      <widget class="QLabel" name="label_56">
-                       <property name="text">
-                        <string>Column 4</string>
-                       </property>
-                       <property name="alignment">
-                        <set>Qt::AlignCenter</set>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <layout class="QHBoxLayout" name="horizontalLayout_36">
-                       <property name="spacing">
-                        <number>0</number>
-                       </property>
-                       <property name="topMargin">
-                        <number>0</number>
-                       </property>
-                       <item>
-                        <spacer name="horizontalSpacer_33">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                       <item>
-                        <widget class="QLineEdit" name="lineEdit_RDCFB_Column4">
-                         <property name="sizePolicy">
-                          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                           <horstretch>0</horstretch>
-                           <verstretch>0</verstretch>
-                          </sizepolicy>
-                         </property>
-                         <property name="maximumSize">
-                          <size>
-                           <width>45</width>
-                           <height>16777215</height>
-                          </size>
-                         </property>
-                         <property name="alignment">
-                          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                         </property>
-                        </widget>
-                       </item>
-                       <item>
-                        <spacer name="horizontalSpacer_32">
-                         <property name="orientation">
-                          <enum>Qt::Horizontal</enum>
-                         </property>
-                         <property name="sizeHint" stdset="0">
-                          <size>
-                           <width>0</width>
-                           <height>0</height>
-                          </size>
-                         </property>
-                        </spacer>
-                       </item>
-                      </layout>
-                     </item>
-                    </layout>
-                   </item>
-                  </layout>
-                 </item>
-                </layout>
-               </widget>
               </item>
               <item>
                <widget class="QGroupBox" name="groupBox_voltageBias_2">
@@ -1651,7 +1145,7 @@
                     </sizepolicy>
                    </property>
                    <property name="title">
-                    <string>ADC Control</string>
+                    <string>ADC/Amplifier Control</string>
                    </property>
                    <layout class="QVBoxLayout" name="verticalLayout_16">
                     <property name="spacing">
@@ -1805,47 +1299,16 @@
                         </item>
                         <item>
                          <layout class="QHBoxLayout" name="horizontalLayout">
+                          <property name="topMargin">
+                           <number>0</number>
+                          </property>
+                          <property name="rightMargin">
+                           <number>0</number>
+                          </property>
                           <item>
-                           <widget class="QLineEdit" name="lineEdit_getDataFileSelect">
-                            <property name="sizePolicy">
-                             <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-                              <horstretch>0</horstretch>
-                              <verstretch>0</verstretch>
-                             </sizepolicy>
-                            </property>
-                            <property name="maximumSize">
-                             <size>
-                              <width>50</width>
-                              <height>16777215</height>
-                             </size>
-                            </property>
-                            <property name="baseSize">
-                             <size>
-                              <width>0</width>
-                              <height>0</height>
-                             </size>
-                            </property>
-                            <property name="alignment">
-                             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                            </property>
-                           </widget>
-                          </item>
-                          <item>
-                           <widget class="QPushButton" name="pushButton_getDataFileSelect">
-                            <property name="sizePolicy">
-                             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                              <horstretch>0</horstretch>
-                              <verstretch>0</verstretch>
-                             </sizepolicy>
-                            </property>
-                            <property name="maximumSize">
-                             <size>
-                              <width>31</width>
-                              <height>23</height>
-                             </size>
-                            </property>
+                           <widget class="QPushButton" name="pushButton_resetAllAmplifiers">
                             <property name="text">
-                             <string>...</string>
+                             <string>Reset All Amps</string>
                             </property>
                            </widget>
                           </item>
@@ -1999,6 +1462,9 @@
                         </item>
                         <item>
                          <layout class="QGridLayout" name="gridLayout_5">
+                          <property name="spacing">
+                           <number>0</number>
+                          </property>
                           <item row="0" column="0">
                            <widget class="QCheckBox" name="checkBox_biasEnable">
                             <property name="text">
@@ -2033,7 +1499,7 @@
                              <bool>false</bool>
                             </property>
                             <property name="text">
-                             <string>Enable SWCap clock</string>
+                             <string>Enable SWCap clk</string>
                             </property>
                            </widget>
                           </item>
@@ -2052,11 +1518,34 @@
                            </widget>
                           </item>
                           <item row="3" column="1">
-                           <widget class="QPushButton" name="pushButton_resetAllAmplifiers">
-                            <property name="text">
-                             <string>Reset All Amplifiers</string>
+                           <layout class="QHBoxLayout" name="horizontalLayout_37">
+                            <property name="spacing">
+                             <number>3</number>
                             </property>
-                           </widget>
+                            <item>
+                             <widget class="QLabel" name="label_57">
+                              <property name="text">
+                               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:8pt;&quot;&gt;R&lt;/span&gt;&lt;span style=&quot; font-size:8pt; vertical-align:sub;&quot;&gt;DCFB &lt;/span&gt;&lt;span style=&quot; font-size:8pt;&quot;&gt;(MΩ)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                              </property>
+                             </widget>
+                            </item>
+                            <item>
+                             <widget class="QLineEdit" name="lineEdit_amplifierRDCFB">
+                              <property name="maximumSize">
+                               <size>
+                                <width>55</width>
+                                <height>16777215</height>
+                               </size>
+                              </property>
+                              <property name="alignment">
+                               <set>Qt::AlignCenter</set>
+                              </property>
+                              <property name="placeholderText">
+                               <string>50</string>
+                              </property>
+                             </widget>
+                            </item>
+                           </layout>
                           </item>
                          </layout>
                         </item>
@@ -2254,6 +1743,9 @@
                               </property>
                               <property name="alignment">
                                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                              </property>
+                              <property name="placeholderText">
+                               <string>100</string>
                               </property>
                              </widget>
                             </item>
@@ -2583,7 +2075,7 @@
                      <property name="maximumSize">
                       <size>
                        <width>60</width>
-                       <height>16777215</height>
+                       <height>20</height>
                       </size>
                      </property>
                      <property name="alignment">
@@ -2658,6 +2150,18 @@
                         </property>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialPlus900_absolute">
+                          <property name="sizePolicy">
+                           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                            <horstretch>0</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>+900mV</string>
                           </property>
@@ -2671,6 +2175,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialPlus500_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>+500mV</string>
                           </property>
@@ -2678,6 +2188,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialPlus400_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>+400mV</string>
                           </property>
@@ -2685,6 +2201,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialPlus300_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>+300mV</string>
                           </property>
@@ -2692,6 +2214,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialPlus200_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>+200mV</string>
                           </property>
@@ -2699,6 +2227,18 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialPlus100_absolute">
+                          <property name="sizePolicy">
+                           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                            <horstretch>0</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>+100mV</string>
                           </property>
@@ -2712,6 +2252,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialPlus50_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>+50mV</string>
                           </property>
@@ -2726,6 +2272,12 @@
                         </property>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialMinus900_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>-900mV</string>
                           </property>
@@ -2733,6 +2285,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialMinus500_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>-500mV</string>
                           </property>
@@ -2740,6 +2298,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialMinus400_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>-400mV</string>
                           </property>
@@ -2747,6 +2311,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialMinus300_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>-300mV</string>
                           </property>
@@ -2754,6 +2324,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialMinus200_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>-200mV</string>
                           </property>
@@ -2761,6 +2337,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialMinus100_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>-100mV</string>
                           </property>
@@ -2768,6 +2350,12 @@
                         </item>
                         <item>
                          <widget class="QPushButton" name="pushButton_counterelectrodePotentialMinus50_absolute">
+                          <property name="maximumSize">
+                           <size>
+                            <width>16777215</width>
+                            <height>19</height>
+                           </size>
+                          </property>
                           <property name="text">
                            <string>-50mV</string>
                           </property>
@@ -2802,6 +2390,12 @@
                           <horstretch>0</horstretch>
                           <verstretch>0</verstretch>
                          </sizepolicy>
+                        </property>
+                        <property name="maximumSize">
+                         <size>
+                          <width>16777215</width>
+                          <height>19</height>
+                         </size>
                         </property>
                         <property name="text">
                          <string>Zero</string>
@@ -2885,7 +2479,7 @@
                         <property name="maximumSize">
                          <size>
                           <width>50</width>
-                          <height>16777215</height>
+                          <height>19</height>
                          </size>
                         </property>
                         <property name="text">
@@ -2898,7 +2492,7 @@
                         <property name="maximumSize">
                          <size>
                           <width>50</width>
-                          <height>16777215</height>
+                          <height>19</height>
                          </size>
                         </property>
                         <property name="text">
@@ -2911,7 +2505,7 @@
                         <property name="maximumSize">
                          <size>
                           <width>50</width>
-                          <height>16777215</height>
+                          <height>19</height>
                          </size>
                         </property>
                         <property name="text">
@@ -2924,7 +2518,7 @@
                         <property name="maximumSize">
                          <size>
                           <width>50</width>
-                          <height>16777215</height>
+                          <height>19</height>
                          </size>
                         </property>
                         <property name="text">
@@ -2937,7 +2531,7 @@
                         <property name="maximumSize">
                          <size>
                           <width>50</width>
-                          <height>16777215</height>
+                          <height>19</height>
                          </size>
                         </property>
                         <property name="text">
@@ -2962,7 +2556,7 @@
                         <property name="maximumSize">
                          <size>
                           <width>50</width>
-                          <height>16777215</height>
+                          <height>19</height>
                          </size>
                         </property>
                         <property name="text">
@@ -3050,7 +2644,7 @@
                 <property name="maximumSize">
                  <size>
                   <width>50</width>
-                  <height>16777215</height>
+                  <height>20</height>
                  </size>
                 </property>
                 <property name="alignment">
@@ -3239,7 +2833,7 @@
         <property name="minimumSize">
          <size>
           <width>159</width>
-          <height>700</height>
+          <height>675</height>
          </size>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_20">
@@ -4914,7 +4508,7 @@
         <property name="minimumSize">
          <size>
           <width>375</width>
-          <height>700</height>
+          <height>675</height>
          </size>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_35">

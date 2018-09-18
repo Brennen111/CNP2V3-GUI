@@ -8,6 +8,7 @@ class AMPLIFIER:
     triangleWave = None
     resetIntegrator = None
     connectISRCEXT = None
+    rdcfb = None
 
     def __init__(self):
         self.gainIndex = 0
@@ -17,6 +18,7 @@ class AMPLIFIER:
         self.enableTriangleWave = 0
         self.resetIntegrator = 0
         self.connectISRCEXT = 0
+        self.rdcfb = 50e6
 
 class ADC:
     adcData = None

@@ -16,71 +16,11 @@ from compressdata import CompressData
 from loadolddata import LoadOldDataWindow
 import workerobjects
 
-QWIDGETSIZE_MAX = ((1<<24)-1) # Windows PyQt4 comments out the definition for this in QtGui and QWidget so it cannot be resolved. Including it myself here
+QWIDGETSIZE_MAX = ((1<<24)-1)  # Windows PyQt4 comments out the definition for this in QtGui and QWidget so it cannot be resolved. Including it myself here
 
 # pyqtgraph.setConfigOptions(useWeave = False) #To remove gcc related error
 pyqtgraph.setConfigOption('background', 'w') #Set background to white
 pyqtgraph.setConfigOption('foreground', 'k') #Set foreground to black
-
-# class AMPLIFIER:
-#     gainIndex = None
-#     biasEnable = None
-#     connectElectrode = None
-#     enableSWCapClock = None
-#     triangleWave = None
-#     resetIntegrator = None
-#     connectISRCEXT = None
-#
-#     def __init__(self):
-#         self.gainIndex = 0
-#         self.biasEnable = 0
-#         self.connectElectrode = 0
-#         self.enableSWCapClock = 0
-#         self.enableTriangleWave = 0
-#         self.resetIntegrator = 0
-#         self.connectISRCEXT = 0
-#
-# class ADC:
-#     adcData = None
-#     xDataToDisplay = None
-#     yDataToDisplay = None
-#     ivData_voltage = None
-#     ivData_current = None
-#     idcOffset = None
-#     idcRelative = None
-#     poreResistance = None
-#     rmsNoise = None
-#     rmsNoise_100kHz = None
-#     rmsNoise_1MHz = None
-#     rmsNoise_10MHz = None
-#     f = None
-#     psd = None
-#     psdFit = None
-#     histogramView = None
-#     bins = None
-#     #amplifierList = [] # Using this creates a global scope list for some reason.
-#
-#     def __init__(self):
-#         self.adcData = []
-#         self.xDataToDisplay = []
-#         self.yDataToDisplay = []
-#         self.ivData_voltage = []
-#         self.ivData_current = []
-#         self.idcOffset = 0
-#         self.idcRelative = 0
-#         self.poreResistance = 0
-#         self.rmsNoise = 0
-#         self.rmsNoise_100kHz = 0
-#         self.rmsNoise_1MHz = 0
-#         self.rmsNoise_10MHz = 0
-#         self.f = []
-#         self.psd = 0
-#         self.psdFit = 0
-#         self.histogramView = None
-#         self.bins = None
-#         self.amplifierList = []
-#         for i in xrange(5):
-#             self.amplifierList.append(AMPLIFIER())
 
 class MainWindow(QtGui.QMainWindow):
 
@@ -169,16 +109,9 @@ class MainWindow(QtGui.QMainWindow):
         # self.ADC3ModeConfig = 0
         self.rowSelect = 0
         self.columnSelect = 0
-        # self.ui.lineEdit_getDataSize.setPlaceholderText("Size of data (20e6)")
-        self.ui.lineEdit_getDataFileSelect.setPlaceholderText("test")
-        self.dataSize = 20000000
-        self.dataFileSelected = "./test.hex"
         self.ui.lineEdit_logDuration.setPlaceholderText("1")
-        self.ui.lineEdit_RDCFB.setPlaceholderText("50")
         self.mbCommonModePotential = 0
-        self.RDCFB = 50e6
         self.RAMMemoryUsage = 0.0
-        self.ui.lineEdit_livePreviewFilterBandwidth.setPlaceholderText("100")
         self.livePreviewFilterBandwidth = 100e3
         self.voltageSweepIndex = 0
         self.IVCycles = 0
@@ -201,9 +134,6 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_ADC4enable.stateChanged.connect(self.checkBox_ADC4enable_clicked)
         self.ui.checkBox_ADCenable.stateChanged.connect(self.checkBox_ADCenable_clicked)
 
-        self.ui.lineEdit_getDataFileSelect.editingFinished.connect(self.lineEdit_getDataFileSelect_editingFinished)
-        self.ui.pushButton_getDataFileSelect.clicked.connect(self.pushButton_getDataFileSelect_clicked)
-
         self.ui.comboBox_rowSelect.activated.connect(self.comboBox_rowSelect_activated)
         self.ui.comboBox_columnSelect.activated.connect(self.comboBox_columnSelect_activated)
         self.ui.comboBox_amplifierGainSelect.activated.connect(self.comboBox_amplifierGainSelect_activated)
@@ -212,6 +142,8 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_integratorReset.stateChanged.connect(self.checkBox_integratorReset_clicked)
         self.ui.checkBox_connectElectrode.stateChanged.connect(self.checkBox_connectElectrode_clicked)
         self.ui.checkBox_connectISRCEXT.stateChanged.connect(self.checkBox_connectISRCEXT_clicked)
+
+        self.ui.lineEdit_amplifierRDCFB.editingFinished.connect(self.lineEdit_amplifierRDCFB_editingFinished)
 
         self.ui.action_enableLivePreview.triggered.connect(self.action_enableLivePreview_triggered)
         self.ui.action_reset.triggered.connect(self.pushButton_reset_clicked)
@@ -244,7 +176,6 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.pushButton_counterelectrodePotentialPlus10_relative.clicked.connect(lambda: self.updateCounterelectrodePotential(float(self.ui.lineEdit_counterelectrodePotential.text())/1000 + 0.01))
         self.ui.pushButton_counterelectrodePotentialMinus10_relative.clicked.connect(lambda: self.updateCounterelectrodePotential(float(self.ui.lineEdit_counterelectrodePotential.text())/1000 - 0.01))
 
-        self.ui.lineEdit_RDCFB.editingFinished.connect(self.lineEdit_RDCFB_editingFinished)
         self.ui.pushButton_IDCSetOffset.clicked.connect(self.pushButton_IDCSetOffset_clicked)
         self.ui.checkBox_enableTriangleWave.clicked.connect(self.checkBox_enableTriangleWave_clicked)
         self.ui.checkBox_enableSquareWave.clicked.connect(self.checkBox_enableSquareWave_clicked)
@@ -923,38 +854,6 @@ class MainWindow(QtGui.QMainWindow):
             self.adjustSize()
             self.setFixedWidth(self.width())
 
-    #def lineEdit_getDataSize_editingFinished(self):
-    #    """This method gets the data size to be saved from the text box called lineEdit_getDataSize once it is done being edited"""
-    #    try:
-    #        self.dataSize = int(eval(str(self.ui.lineEdit_getDataSize.displayText())))
-    #    except TypeError:
-    #       print "Enter the size of the data to be transferred in scientific notation"
-    #    # self.structInstance = struct.Struct('i' * (self.dataSize / 4))
-    #    print self.ui.lineEdit_getDataSize.displayText()
-
-    def lineEdit_getDataFileSelect_editingFinished(self):
-        """Displays the selected file in the lineEdit_getDataFileSelect box"""
-        # print self.ui.lineEdit_getDataFileSelect.displayText()
-        self.dataFileSelected = str(self.ui.lineEdit_getDataFileSelect.displayText())
-        # print self.dataFileSelected[-4:]
-        if (".hex" == self.dataFileSelected[-4:]):
-            self.dataFileSelected = self.dataFileSelected[0:len(self.dataFileSelected)-4]
-        print self.dataFileSelected
-
-    def pushButton_getDataFileSelect_clicked(self):
-        """This method handles the behaviour of the GUI when the browse button corresponding to the data file to be saved is clicked.
-        Opens a file dialog for picking the file and then updates the corresponding text box to reflect the selection"""
-        if not os.path.exists("./Logfiles"):
-            os.makedirs("./Logfiles")
-        folderSelecter = QtGui.QFileDialog()
-        self.dataFolderSelected = folderSelecter.getExistingDirectory(self, "Select Folder", "./Logfiles")#, "./", filter="Hex files (*.hex)", selectedFilter="*.hex")
-        self.ui.lineEdit_getDataFileSelect.setText(self.dataFolderSelected)
-
-    #def pushButton_getData_clicked(self):
-    #    """Activates the file transfer. The length of the data is defined by the specified duration"""
-    #    self.ui.lineEdit_logDuration.setText(str(round(self.dataSize/globalConstants.FRAMELENGTH_MASTER*globalConstants.FRAMEDURATION/1000.0, 1)))
-    #    self.ui.action_enableLogging.setChecked(1)
-
     def comboBox_rowSelect_activated(self, index):
         """Sets the row selection for the chip (and the daughterboard)"""
         self.rowSelect = self.rowSelectOptions[index]
@@ -964,6 +863,7 @@ class MainWindow(QtGui.QMainWindow):
         # I do it this way to reduce the number of repeated instructions fed to the command handler in the FPGA communication threads
         for column in xrange(5):
             if column != self.columnSelect:
+                self.adcList[column].idcOffset = 0
                 shiftFactor = column*5  # Shift config bits by 5x depending on the xth column selected
                 amplifierGain = self.amplifierGainMask[column] & ((self.amplifierGainOptions[self.adcList[column].amplifierList[self.rowSelect].gainIndex]) << shiftFactor)
 
@@ -973,6 +873,7 @@ class MainWindow(QtGui.QMainWindow):
                 self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectISRCEXTMask[column]*self.adcList[column].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[column]])
 
         # I have to queue the wire values for my selected row and column to avoid problems with sending a new message that will overwrite the intended settings.
+        self.adcList[self.columnSelect].idcOffset = 0
         shiftFactor = self.columnSelect*5  # Shift config bits by 5x depending on the xth column selected
         amplifierGain = self.amplifierGainMask[self.columnSelect] & ((self.amplifierGainOptions[self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex]) << shiftFactor)
 
@@ -989,6 +890,7 @@ class MainWindow(QtGui.QMainWindow):
 
         # Update settings with programmed settings
         self.ui.comboBox_amplifierGainSelect.blockSignals(True)
+        self.ui.lineEdit_amplifierRDCFB.blockSignals(True)
 
         self.ui.comboBox_amplifierGainSelect.setCurrentIndex(self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex)
         self.ui.checkBox_biasEnable.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable)
@@ -997,6 +899,7 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_enableTriangleWave.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave)
         self.ui.checkBox_integratorReset.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator)
         self.ui.checkBox_connectISRCEXT.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT)
+        self.ui.lineEdit_amplifierRDCFB.setText(str(round(self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb / 1e6, 1)))
 
         if (4 == self.rowSelect):
             self.ui.checkBox_enableSwitchedCapClock.setEnabled(1)
@@ -1004,6 +907,9 @@ class MainWindow(QtGui.QMainWindow):
             self.ui.checkBox_enableSwitchedCapClock.setEnabled(0)
 
         self.ui.comboBox_amplifierGainSelect.blockSignals(False)
+        self.ui.lineEdit_amplifierRDCFB.blockSignals(False)
+
+        self.updateIDCLabels()
 
     def comboBox_columnSelect_activated(self, index):
         """Sets the column selection for the chip. Clears out data for the other columns when a column switch is initiated"""
@@ -1026,6 +932,7 @@ class MainWindow(QtGui.QMainWindow):
 
         # Update settings with programmed settings
         self.ui.comboBox_amplifierGainSelect.blockSignals(True)
+        self.ui.lineEdit_amplifierRDCFB.blockSignals(True)
 
         self.ui.comboBox_amplifierGainSelect.setCurrentIndex(self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex)
         self.ui.checkBox_biasEnable.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable)
@@ -1034,8 +941,10 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.checkBox_enableTriangleWave.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave)
         self.ui.checkBox_integratorReset.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator)
         self.ui.checkBox_connectISRCEXT.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT)
+        self.ui.lineEdit_amplifierRDCFB.setText(str(round(self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb / 1e6, 1)))
 
         self.ui.comboBox_amplifierGainSelect.blockSignals(False)
+        self.ui.lineEdit_amplifierRDCFB.blockSignals(False)
 
     def comboBox_amplifierGainSelect_activated(self, index):
         """Sets the amplifier gain (by setting the feedback capacitor) for the selected amplifier"""
@@ -1300,16 +1209,18 @@ class MainWindow(QtGui.QMainWindow):
         #     self.ui.label_FPGASlaveBufferUtilization.setText(str(self.FPGASlaveRAMMemoryUsage)+'/128 MB')
         pass
 
-    def lineEdit_RDCFB_editingFinished(self):
+    def lineEdit_amplifierRDCFB_editingFinished(self):
         """Reads in the new value of RDCFB from the GUI once it has been edited"""
-        oldRDCFB = self.RDCFB
+        oldRDCFB = self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb
         try:
-            self.RDCFB = eval(str(self.ui.lineEdit_RDCFB.text()))*1e6
-            if self.RDCFB == 0:
-                self.RDCFB = oldRDCFB
+            self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb = eval(str(self.ui.lineEdit_amplifierRDCFB.text()))*1e6
+            if self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb == 0:
+                self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb = oldRDCFB
         except:
-            self.RDCFB = 50*1e6
-        self.ui.lineEdit_RDCFB.setText(str(round(self.RDCFB/1e6, 1)))
+            self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb = 50*1e6
+        self.ui.lineEdit_amplifierRDCFB.setText(str(round(self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb/1e6, 1)))
+        print self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb
+
 
     def checkBox_enableTriangleWave_clicked(self):
         """Changes the pattern on the counterelectrode potential to a triangle wave. The actual code that generates the counterelectrode potential values to create the triangle wave is on the FPGA"""
@@ -1392,9 +1303,6 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.lineEdit_livePreviewFilterBandwidth.setText(str(int(self.livePreviewFilterBandwidth/1e3)))
         self.processRawDataADCMasterWorkerInstance.createFilter(self.livePreviewFilterBandwidth)
         self.processRawDataADCSlaveWorkerInstance.createFilter(self.livePreviewFilterBandwidth)
-        # self.processRawDataADC2WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
-        # self.processRawDataADC3WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
-        # self.processRawDataADC4WorkerInstance.createFilter(self.livePreviewFilterBandwidth)
 
     def action_saveState_triggered(self, configSaveFileSelected = None):
         """Saves a variety of options from the GUI into a cfg file for easy loading later on"""
@@ -1414,8 +1322,7 @@ class MainWindow(QtGui.QMainWindow):
                           'ADC3Enable'  : self.ui.checkBox_ADC3enable.isChecked(),
                           'ADC4Enable'  : self.ui.checkBox_ADC4enable.isChecked(),
                           'columnSelect': self.columnSelect,
-                          'rowSelect'   : self.rowSelect,
-                          'RDCFB'       : self.RDCFB})
+                          'rowSelect'   : self.rowSelect})
         #json.dump(adcStateConfig, f, indent=0)
 
         for column in xrange(5):
@@ -1429,7 +1336,8 @@ class MainWindow(QtGui.QMainWindow):
                                'connectISRCEXT': self.adcList[column].amplifierList[row].connectISRCEXT,
                                'enableSWCapClock': self.adcList[column].amplifierList[row].enableSWCapClock,
                                'enableTriangleWave': self.adcList[column].amplifierList[row].enableTriangleWave,
-                               'IDCOffset': self.adcList[column].idcOffset})
+                               'IDCOffset': self.adcList[column].idcOffset,
+                               'RDCFB': self.adcList[column].amplifierList[row].rdcfb})
 
         json.dump(stateConfig, f, indent=0)
         f.close()
@@ -1461,29 +1369,30 @@ class MainWindow(QtGui.QMainWindow):
             adc4Enable = stateConfig[i].pop('ADC4Enable', None)
             columnSelect = stateConfig[i].pop('columnSelect', None)
             rowSelect = stateConfig[i].pop('rowSelect', None)
-            RDCFB = stateConfig[i].pop('RDCFB', None)
 
             if (None != adc0Enable):
                 self.ui.checkBox_ADC0enable.setChecked(adc0Enable)
+                self.ui.checkBox_ADC0enable.click()
             if (None != adc1Enable):
                 self.ui.checkBox_ADC1enable.setChecked(adc1Enable)
+                self.ui.checkBox_ADC1enable.click()
             if (None != adc2Enable):
                 self.ui.checkBox_ADC2enable.setChecked(adc2Enable)
+                self.ui.checkBox_ADC2enable.click()
             if (None != adc3Enable):
                 self.ui.checkBox_ADC3enable.setChecked(adc3Enable)
+                self.ui.checkBox_ADC3enable.click()
             if (None != adc4Enable):
                 self.ui.checkBox_ADC4enable.setChecked(adc4Enable)
+                self.ui.checkBox_ADC4enable.click()
             if (None != columnSelect):
                 self.columnSelect = columnSelect
             if (None != rowSelect):
                 self.rowSelect = rowSelect
-            if (None != RDCFB):
-                self.RDCFB = RDCFB
-                self.ui.lineEdit_RDCFB.setText(str(round(RDCFB/1e6, 1)))
 
             # Load column and row information first for indexing the rest
-            column = stateConfig[i].pop('column', columnSelect) # default to columnSelect for backwards compatability
-            row = stateConfig[i].pop('row', rowSelect) # default to rowSelect for backwards compatability
+            column = stateConfig[i].pop('column', None)
+            row = stateConfig[i].pop('row', None)
             # If the global configuration stateConfig entry is not present the single channel data will be loaded.
             # Otherwise, the columnSelect and rowSelect will be used but eventually overwritten.
             # Works for now
@@ -1497,10 +1406,11 @@ class MainWindow(QtGui.QMainWindow):
                 self.adcList[column].amplifierList[row].enableSWCapClock = stateConfig[i].pop('enableSWCapClock', 0)
                 self.adcList[column].amplifierList[row].enableTriangleWave = stateConfig[i].pop('enableTriangleWave', 0)
                 self.adcList[column].idcOffset = stateConfig[i].pop('IDCOffset', 0) # TODO This is being overwritten over and over again. Leave until we implement all 25 channels
+                self.adcList[column].amplifierList[row].rdcfb = stateConfig[i].pop('RDCFB', 50*1e6)
 
                 shiftFactor = column * 5  # Shift config bits by 5x depending on the xth column selected
                 amplifierGain = self.amplifierGainMask[column] & ((self.amplifierGainOptions[self.adcList[column].amplifierList[row].gainIndex]) << shiftFactor)
-
+                self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, row, self.rowSelectMask])
                 self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[column] * self.adcList[column].amplifierList[row].biasEnable, self.biasEnableMask[column]])
                 self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.connectElectrodeMask[column] * self.adcList[column].amplifierList[row].connectElectrode, self.connectElectrodeMask[column]])
                 self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain, self.amplifierGainMask[column]])
@@ -1510,6 +1420,36 @@ class MainWindow(QtGui.QMainWindow):
                 self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00, self.enableTriangleWaveMask * self.adcList[column].amplifierList[row].enableTriangleWave, self.enableTriangleWaveMask])
                 self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
                 self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+
+        # I have to queue the wire values for my selected row and column to avoid problems with sending a new message that will overwrite the intended settings.
+        shiftFactor = self.columnSelect * 5  # Shift config bits by 5x depending on the xth column selected
+        amplifierGain = self.amplifierGainMask[self.columnSelect] & ((self.amplifierGainOptions[self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex]) << shiftFactor)
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02, self.rowSelect, self.rowSelectMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, self.biasEnableMask[self.columnSelect] * self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable, self.biasEnableMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01,self.connectElectrodeMask[self.columnSelect] * self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode, self.connectElectrodeMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01, amplifierGain,self.amplifierGainMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01,self.integratorResetMask[self.rowSelect] * self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator, self.integratorResetMask[self.rowSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x01,self.connectISRCEXTMask[self.columnSelect] * self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT, self.connectISRCEXTMask[self.columnSelect]])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x02,self.enableSwitchedCapClockMask * self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock, self.enableSwitchedCapClockMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDQUEUEWIRE, 'Error (CMDQUEUEWIRE): ', 0x00,self.enableTriangleWaveMask * self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave, self.enableTriangleWaveMask])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDUPDATEWIRE, 'Error (CMDUPDATEWIRE): '])
+        self.getDataFromFPGAMasterWorkerInstance.commandQueue.put([globalConstants.CMDTRIGGERWIRE, 'Error (CMDTRIGGERWIRE): ', 0x41, 1])
+
+        # Update settings with programmed settings
+        self.ui.comboBox_amplifierGainSelect.blockSignals(True)
+        self.ui.lineEdit_amplifierRDCFB.blockSignals(True)
+
+        self.ui.comboBox_amplifierGainSelect.setCurrentIndex(self.adcList[self.columnSelect].amplifierList[self.rowSelect].gainIndex)
+        self.ui.checkBox_biasEnable.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].biasEnable)
+        self.ui.checkBox_connectElectrode.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectElectrode)
+        self.ui.checkBox_enableSwitchedCapClock.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableSWCapClock)
+        self.ui.checkBox_enableTriangleWave.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].enableTriangleWave)
+        self.ui.checkBox_integratorReset.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].resetIntegrator)
+        self.ui.checkBox_connectISRCEXT.setChecked(self.adcList[self.columnSelect].amplifierList[self.rowSelect].connectISRCEXT)
+        self.ui.lineEdit_amplifierRDCFB.setText(str(round(self.adcList[self.columnSelect].amplifierList[self.rowSelect].rdcfb / 1e6, 1)))
+
+        self.ui.comboBox_amplifierGainSelect.blockSignals(False)
+        self.ui.lineEdit_amplifierRDCFB.blockSignals(False)
 
     def action_compressData_triggered(self):
         self.compressDataWindow0 = CompressData()
