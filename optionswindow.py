@@ -3,10 +3,15 @@ from optionsWindow_gui import Ui_Dialog
 import globalConstants
 
 class OptionsWindow(QtGui.QDialogButtonBox):
+    optionsUpdated = QtCore.pyqtSignal()
+
     def __init__(self):
         QtGui.QDialogButtonBox.__init__(self)
         self.ui = Ui_Dialog()
         self.ui.setupUi(self)
+
+        self.accepted.connect(self.accept)
+        self.rejected.connect(self.reject)
 
         #These settings correspond to the general tab of the options window
         self.PRESETMODE = globalConstants.PRESETMODE
@@ -92,6 +97,8 @@ class OptionsWindow(QtGui.QDialogButtonBox):
         globalConstants.IVVOLTAGESTEP = self.IVVOLTAGESTEP
         globalConstants.IVTIMESTEP = self.IVTIMESTEP
         globalConstants.IVNUMBEROFCYCLES = self.IVNUMBEROFCYCLES
+
+        self.optionsUpdated.emit()
         self.close()
 
     def reject(self):

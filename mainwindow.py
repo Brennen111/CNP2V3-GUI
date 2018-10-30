@@ -184,6 +184,8 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.action_enableLogging.triggered.connect(self.action_enableLogging_triggered)
         self.ui.lineEdit_livePreviewFilterBandwidth.editingFinished.connect(self.lineEdit_livePreviewFilterBandwidth_editingFinished)
 
+        self.ui.lineEdit_filePrefix.editingFinished.connect(self.lineEdit_filePrefix_editingFinished)
+
         # self.ui.label_poreResistance.mouseReleaseEvent = self.label_poreResistance_clicked()
 
         self.ui.pushButton_MasterBiasElectrodeControlReset.clicked.connect(self.pushButton_master_bias_electrode_control_reset_clicked)
@@ -302,7 +304,7 @@ class MainWindow(QtGui.QMainWindow):
 
 
         #######################################################################
-        # Initializing Multi-Row Channel Plots (Column Plots)
+        # Initializing Multi-Column Channel Plots (Row Plot)
         #######################################################################
         self.ui.rowPlot_style = {'color': '#000', 'font-size': '9pt'}
 
@@ -1105,7 +1107,7 @@ class MainWindow(QtGui.QMainWindow):
                     if self.adcList[column].ivData_voltage != []:
                         self.ui.rowPlot_IV_columnPlotArray[column].setData(self.adcList[column].ivData_voltage, self.adcList[column].ivData_current)
                 self.stop = time.clock()
-                # print "Main GUI thread took", self.stop-self.start, "s"
+        # print "Main GUI thread took", self.stop-self.start, "s"
 
     def updateReferenceelectrodePotential(self, value=0.0):
         """Updates the reference electrode potential. This is called once at the start of the program to set the reference potential to 900mV and subsequently everytime the counter electrode is set to 0 relative potential."""
@@ -1614,3 +1616,7 @@ class MainWindow(QtGui.QMainWindow):
             self.adcList[column].idcOffset += self.adcList[column].idcRelative
             #self.ui.label_rowPlotIDCOffsetArray[column].setText(str(self.adcList[column].idcOffset * 1e9))
         self.updateIDCLabels()
+
+    def lineEdit_filePrefix_editingFinished(self):
+        self.writeToMasterLogFileWorkerInstance.setFileName(str(self.ui.lineEdit_livePreviewFilterBandwidth.text()))
+        self.writeToSlaveLogFileWorkerInstance.setFileName(str(self.ui.lineEdit_livePreviewFilterBandwidth.text()))

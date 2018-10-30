@@ -30,9 +30,9 @@ class ADC:
     idcRelative = None
     poreResistance = None
     rmsNoise = None
+    rmsNoise_10kHz = None
     rmsNoise_100kHz = None
     rmsNoise_1MHz = None
-    rmsNoise_10MHz = None
     f = None
     psd = None
     psdFit = None
@@ -50,9 +50,9 @@ class ADC:
         self.idcRelative = 0
         self.poreResistance = 0
         self.rmsNoise = 0
+        self.rmsNoise_10kHz = 0
         self.rmsNoise_100kHz = 0
         self.rmsNoise_1MHz = 0
-        self.rmsNoise_10MHz = 0
         self.f = []
         self.psd = 0
         self.psdFit = 0
