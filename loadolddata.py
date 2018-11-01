@@ -324,7 +324,7 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             elif('Slave' == dataLoadFileSelected[0:-len('.hex')].split('_')[-1]):
                 configLoadFileSelected = dataLoadFileSelected[0:-len('_Slave.hex')] + ".cfg"
                 self.comboBox_columnSelect_activated(2) # This won't start the rawData thread because the dataInMemory flag is 0
-                self.processRawDataMasterWorkerInstance.rawData = f.read()
+                self.processRawDataSlaveWorkerInstance.rawData = f.read()
                 self.slaveDataInMemory = True
                 self.dataInMemory = 1
                 f.close()
