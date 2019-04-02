@@ -251,11 +251,10 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.ui.lineEdit_totalEvents.setEnabled(False)
         self.ui.pushButton_previousEvent.setEnabled(False)
         self.ui.pushButton_nextEvent.setEnabled(False)
-        self.numberOfSigmas = None
+        #self.numberOfSigmas = None
         self.sigma = None
         self.baseline = None
         self.threshold = None
-        self.lineEdit_threshold_editingFinished()
 
         if (1 == self.dataInMemory):
             self.updateDisplayData()
@@ -271,6 +270,12 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.ui.lineEdit_livePreviewFilterBandwidth.setText(str(int(self.livePreviewFilterBandwidth/1e3)))
         self.processRawDataMasterWorkerInstance.createFilter(self.livePreviewFilterBandwidth)
         self.processRawDataSlaveWorkerInstance.createFilter(self.livePreviewFilterBandwidth)
+        self.removeAnalysis()
+        # self.numberOfSigmas = None # Leaving this in resets sigmas to 5 every change in live preview filter bandwidth
+        self.sigma = None
+        self.baseline = None
+        self.threshold = None
+
         if (True == self.masterDataInMemory):
             self.processRawDataMasterThread.start()
         if (True == self.slaveDataInMemory):
@@ -284,17 +289,36 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             self.currentHexFileName = str(dataLoadFileSelected.split('/')[-1])
             self.currentDirectoryName = str(dataLoadFileSelected[:-len(self.currentHexFileName)])
             self.ui.action_deleteFile.setEnabled(True)
-            hexFileList = [os.path.split(x)[1] for x in glob.glob(self.currentDirectoryName + '*.hex')]
+            hexFileList = [os.path.split(x)[1] for x in sorted(glob.glob(self.currentDirectoryName + '*.hex'))]
+            # Sort glob, otherwise filesystem order is used and it is arbitrary
             currentHexFileIndex = hexFileList.index(self.currentHexFileName)
-            if (currentHexFileIndex != 0):
-                self.ui.action_previousFile.setEnabled(True)
-            else:
+            if ((currentHexFileIndex == 0) or
+                    ((currentHexFileIndex == 1) and (hexFileList[0].split("_")[:-1] == dataLoadFileSelected.split("_")[:-1]))):
+                # Check if the first file is being loaded or if the second file is being loaded and the
+                # first file is from the same sample.
                 self.ui.action_previousFile.setEnabled(False)
-            if (currentHexFileIndex != len(hexFileList)-1):
-                self.ui.action_nextFile.setEnabled(True)
             else:
+                self.ui.action_previousFile.setEnabled(True)
+
+            if ((currentHexFileIndex == len(hexFileList)-1) or
+                    ((currentHexFileIndex == len(hexFileList)-2) and (hexFileList[len(hexFileList)-1].split("_")[:-1] == dataLoadFileSelected.split("_")[:-1]))):
+                # Check if the last file is being loaded  or if the second to last file is being loaded and the last
+                # file is from the same sample.
                 self.ui.action_nextFile.setEnabled(False)
+            else:
+                self.ui.action_nextFile.setEnabled(True)
             self.loadHexData(dataLoadFileSelected)
+
+            self.removeAnalysis()
+            self.ui.tabWidget_plot.setTabEnabled(3, False)
+            self.ui.lineEdit_currentEvent.setEnabled(False)
+            self.ui.lineEdit_totalEvents.setEnabled(False)
+            self.ui.pushButton_previousEvent.setEnabled(False)
+            self.ui.pushButton_nextEvent.setEnabled(False)
+            #self.numberOfSigmas = None
+            self.sigma = None
+            self.baseline = None
+            self.threshold = None
 
     def loadHexData(self, dataLoadFileSelected = ""):
         self.dataInMemory = 0
@@ -306,7 +330,6 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             f = open(dataLoadFileSelected, 'rb')
             if ('Master' == dataLoadFileSelected[:-len('.hex')].split('_')[-1]):
                 configLoadFileSelected = dataLoadFileSelected[0:-len('_Master.hex')] + ".cfg"
-                self.comboBox_columnSelect_activated(0) # This won't start the rawData thread because the dataInMemory flag is 0
                 self.processRawDataMasterWorkerInstance.rawData = f.read()
                 self.masterDataInMemory = True
                 self.dataInMemory = 1
@@ -323,7 +346,6 @@ class LoadOldDataWindow(QtGui.QMainWindow):
 
             elif('Slave' == dataLoadFileSelected[0:-len('.hex')].split('_')[-1]):
                 configLoadFileSelected = dataLoadFileSelected[0:-len('_Slave.hex')] + ".cfg"
-                self.comboBox_columnSelect_activated(2) # This won't start the rawData thread because the dataInMemory flag is 0
                 self.processRawDataSlaveWorkerInstance.rawData = f.read()
                 self.slaveDataInMemory = True
                 self.dataInMemory = 1
@@ -382,40 +404,69 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             pass
 
     def action_nextFile_triggered(self):
-        hexFileList = [os.path.split(x)[1] for x in glob.glob(self.currentDirectoryName + '*.hex')]
-        currentHexFileIndex = hexFileList.index(self.currentHexFileName)
-        nextHexFileIndex = currentHexFileIndex + 1
-        if nextHexFileIndex == len(hexFileList) - 1:
+        hexFileList = [os.path.split(x)[1] for x in sorted(glob.glob(self.currentDirectoryName + '*.hex'))]
+        currentHexFileIndex = hexFileList.index(self.currentHexFileName) # TODO This can return an error
+        if ((currentHexFileIndex == len(hexFileList) - 1) or
+                ((currentHexFileIndex == len(hexFileList) - 2) and (
+                        hexFileList[len(hexFileList) - 1].split("_")[:-1] == hexFileList[currentHexFileIndex].split("_")[:-1]))):
+            # Check if the last file is currently loaded  or if the second to last file is currently loaded and the last
+            # file is from the same sample.
             self.ui.action_nextFile.setEnabled(False)
-        if nextHexFileIndex != 0:
+        else:
+            if (hexFileList[currentHexFileIndex].split("_")[:-1] == hexFileList[currentHexFileIndex+1].split("_")[:-1]):
+                nextHexFileIndex = currentHexFileIndex + 2
+            else:
+                nextHexFileIndex = currentHexFileIndex + 1
+            if ((nextHexFileIndex == len(hexFileList) - 1) or
+                    ((nextHexFileIndex == len(hexFileList) - 2) and (
+                            hexFileList[len(hexFileList) - 1].split("_")[:-1] == hexFileList[nextHexFileIndex].split("_")[:-1]))):
+                # Check if the last file is being loaded  or if the second to last file is being loaded and the last
+                # file is from the same sample.
+                self.ui.action_nextFile.setEnabled(False)
+            else:
+                self.ui.action_nextFile.setEnabled(True)
+
             self.ui.action_previousFile.setEnabled(True)
-        nextHexFileName = hexFileList[nextHexFileIndex]
-        self.loadHexData(self.currentDirectoryName + nextHexFileName)
-        self.currentHexFileName = nextHexFileName
+            nextHexFileName = hexFileList[nextHexFileIndex]
+            self.loadHexData(self.currentDirectoryName + nextHexFileName)
+            self.currentHexFileName = nextHexFileName
 
     def action_previousFile_triggered(self):
-        hexFileList = [os.path.split(x)[1] for x in glob.glob(self.currentDirectoryName + '*.hex')]
+        hexFileList = [os.path.split(x)[1] for x in sorted(glob.glob(self.currentDirectoryName + '*.hex'))]
         currentHexFileIndex = hexFileList.index(self.currentHexFileName)
-        previousHexFileIndex = currentHexFileIndex - 1
-        if previousHexFileIndex == 0:
+        if ((currentHexFileIndex == 0) or
+                ((currentHexFileIndex == 1) and (hexFileList[0].split("_")[:-1] == hexFileList[currentHexFileIndex].split("_")[:-1]))):
+            # Check if the first file is currently loaded or if the second file is currently loaded and the
+            # first file is from the same sample.
             self.ui.action_previousFile.setEnabled(False)
-        if previousHexFileIndex != len(hexFileList) - 1:
+        else:
+            if (hexFileList[currentHexFileIndex].split("_")[:-1] == hexFileList[currentHexFileIndex-1].split("_")[:-1]):
+                previousHexFileIndex = currentHexFileIndex - 2
+            else:
+                previousHexFileIndex = currentHexFileIndex - 1
+            if ((previousHexFileIndex == 0) or
+                    ((previousHexFileIndex == 1) and (hexFileList[0].split("_")[:-1] == hexFileList[previousHexFileIndex].split("_")[:-1]))):
+                # Check if the first file is being loaded or if the second file is being loaded and the
+                # first file is from the same sample.
+                self.ui.action_previousFile.setEnabled(False)
+            else:
+                self.ui.action_previousFile.setEnabled(True)
+
             self.ui.action_nextFile.setEnabled(True)
-        previousHexFileName = hexFileList[previousHexFileIndex]
-        #print self.currentDirectoryName + previousHexFileName
-        self.loadHexData(self.currentDirectoryName + previousHexFileName)
-        self.currentHexFileName = previousHexFileName
+            previousHexFileName = hexFileList[previousHexFileIndex]
+            self.loadHexData(self.currentDirectoryName + previousHexFileName)
+            self.currentHexFileName = previousHexFileName
 
     def action_deleteFile_triggered(self):
         deleteMessage = 'Are you sure you want to delete ' + self.currentHexFileName + ' ?'
         response = QtGui.QMessageBox.question(self, 'Confirm deletion', deleteMessage, QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
         if response == QtGui.QMessageBox.Yes:
-            hexFileList = [os.path.split(x)[1] for x in glob.glob(self.currentDirectoryName + '*.hex')]
+            hexFileList = [os.path.split(x)[1] for x in sorted(glob.glob(self.currentDirectoryName + '*.hex'))]
             currentHexFileIndex = hexFileList.index(self.currentHexFileName)
-            os.remove(self.currentDirectoryName + self.currentHexFileName)
+            os.remove(self.currentDirectoryName + self.currentHexFileName) # TODO Should I delete master and slave. Yes
             currentCfgFileName = self.currentHexFileName[:-3] + "cfg"
             try:
-                os.remove(self.currentDirectoryName + currentCfgFileName)
+                os.remove(self.currentDirectoryName + currentCfgFileName) # TODO Only delete if slave+master are deleted
             except:
                 pass
             if len(hexFileList) == 1:
@@ -471,9 +522,9 @@ class LoadOldDataWindow(QtGui.QMainWindow):
                     self.ui.graphicsView_histogram_plot.setData(numpy.linspace(0, 1, 100), numpy.ones(100), pen='b')
             elif (3 == currentIndex):
                 indexValuesToPlot = numpy.arange(self.eventIndex[self.currentEvent-1][0]-100, self.eventIndex[self.currentEvent-1][-1] + 101).astype(int)
-                self.ui.graphicsView_eventViewer_plot.setData(indexValuesToPlot.astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate, self.analyzeDataWorkerInstance.rawData[indexValuesToPlot])
+                self.ui.graphicsView_eventViewer_plot.setData(indexValuesToPlot.astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect], self.analyzeDataWorkerInstance.rawData[self.columnSelect][indexValuesToPlot])
                 if (self.ui.checkBox_enableCUSUM.isChecked()):
-                    self.ui.graphicsView_eventViewer_plotFit.setData(indexValuesToPlot[100:-101].astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate, numpy.hstack(self.meanEventValue[self.currentEvent-1]), pen='k', width=2)
+                    self.ui.graphicsView_eventViewer_plotFit.setData(indexValuesToPlot[100:-101].astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect], numpy.hstack(self.meanEventValue[self.currentEvent-1]), pen='k', width=2)
                     self.ui.graphicsView_eventViewer_plotFit.setPen(self.eventFitColor[self.currentEvent-1])
                 # self.ui.graphicsView_eventViewer_plotFit.setData(indexValuesToPlot[500:1000].astype(numpy.float)/globalConstants.ADCSAMPLINGRATE, numpy.hstack(self.meanEventValue[self.currentEvent-1]), pen='k', width=2)
         self.stop = time.clock()
@@ -482,12 +533,11 @@ class LoadOldDataWindow(QtGui.QMainWindow):
     def displayRowData(self, columnList):
         self.start = time.clock()
         currentIndex = self.ui.tabWidget_rowPlot.currentIndex()
-        if (10 <= globalConstants.SUBSAMPLINGFACTOR):
-            for column in columnList:
-                if (0 == currentIndex):
-                    self.ui.rowPlot_time_columnPlotArray[column].setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
-                elif (1 == currentIndex and 0 not in self.adcList[column].psd):
-                    self.ui.rowPlot_frequency_columnPlotArray[column].setData(self.adcList[column].f, self.adcList[column].psd)
+        for column in columnList:
+            if (0 == currentIndex):
+                self.ui.rowPlot_time_columnPlotArray[column].setData(self.adcList[column].xDataToDisplay, self.adcList[column].yDataToDisplay)
+            elif (1 == currentIndex and 0 not in self.adcList[column].psd):
+                self.ui.rowPlot_frequency_columnPlotArray[column].setData(self.adcList[column].f, self.adcList[column].psd)
         self.stop = time.clock()
         # print "Main GUI thread took", self.stop-self.start, "s"
 
@@ -505,8 +555,6 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         for i in xrange(len(stateConfig)):
             columnSelect = stateConfig[i].pop('columnSelect', None)
             rowSelect = stateConfig[i].pop('rowSelect', None)
-            if (None != columnSelect):
-                self.columnSelect = columnSelect
             if (None != rowSelect):
                 self.rowSelect = rowSelect
 
@@ -531,13 +579,13 @@ class LoadOldDataWindow(QtGui.QMainWindow):
     def pushButton_IDCSetOffset_clicked(self):
         """Updates the DC offset current value so that the current being viewed has no DC component left in it"""
         self.adcList[self.columnSelect].idcOffset += self.adcList[self.columnSelect].idcRelative
-        self.ui.label_IDCOffset.setText(str(self.adcList[self.columnSelect].idcOffset * 1e9))
+        self.ui.label_IDCOffset.setText(str(round(self.adcList[self.columnSelect].idcOffset * 1e9, 3)))
 
     def updateIDCLabels(self):
         """Update labels on the GUI indicating the DC offset current, DC relative current and DC net current"""
-        self.ui.label_IDCOffset.setText(str(round(self.adcList[self.columnSelect].idcOffset * 1e9, 1)))
-        self.ui.label_IDCRelative.setText(str(round(self.adcList[self.columnSelect].idcRelative * 1e9, 1)))
-        self.ui.label_IDCNet.setText(str(round((self.adcList[self.columnSelect].idcOffset + self.adcList[self.columnSelect].idcRelative) * 1e9, 1)))
+        self.ui.label_IDCOffset.setText(str(round(self.adcList[self.columnSelect].idcOffset * 1e9, 3)))
+        self.ui.label_IDCRelative.setText(str(round(self.adcList[self.columnSelect].idcRelative * 1e9, 3)))
+        self.ui.label_IDCNet.setText(str(round((self.adcList[self.columnSelect].idcOffset + self.adcList[self.columnSelect].idcRelative) * 1e9, 3)))
 
     def updateNoiseLabels(self):
         """Update labels on the GUI indicating the integrated noise values at 100 kHz, 1 MHz and 10 MHz bandwidths"""
@@ -663,13 +711,6 @@ class LoadOldDataWindow(QtGui.QMainWindow):
     def pushButton_analyzeData_clicked(self):
         """Starts the analyzeData thread. Also enables the event viewer tab and the widgets necessary for interacting with it"""
         self.analyzeDataThread.start()
-        self.ui.tabWidget_plot.setTabEnabled(3, True)
-        self.ui.lineEdit_currentEvent.setEnabled(True)
-        self.ui.lineEdit_totalEvents.setEnabled(True)
-        self.ui.lineEdit_totalEvents.setReadOnly(True) #Need to set readOnly again after enabling the widget to disable interaction
-        self.ui.pushButton_previousEvent.setEnabled(True)
-        self.ui.pushButton_nextEvent.setEnabled(True)
-        self.ui.action_exportAllEventsAsCSV.setEnabled(True)
 
     def removeAnalysis(self):
         """Removes results of previous analysis"""
@@ -681,6 +722,15 @@ class LoadOldDataWindow(QtGui.QMainWindow):
             self.ui.graphicsView_time.removeItem(self.ui.graphicsView_time.eventBeginMarker)
         if (hasattr(self.ui.graphicsView_time, 'eventEndMarker')):
             self.ui.graphicsView_time.removeItem(self.ui.graphicsView_time.eventEndMarker)
+        self.ui.label_ProbOpen.setText("0.000")
+
+        self.ui.tabWidget_plot.setTabEnabled(3, False)
+        self.ui.lineEdit_currentEvent.setEnabled(False)
+        self.ui.lineEdit_totalEvents.setEnabled(False)
+        self.ui.lineEdit_totalEvents.setReadOnly(True) #Need to set readOnly again after enabling the widget to disable interaction
+        self.ui.pushButton_previousEvent.setEnabled(False)
+        self.ui.pushButton_nextEvent.setEnabled(False)
+        self.ui.action_exportAllEventsAsCSV.setEnabled(False)
 
     def displayAnalysis(self):
         self.removeAnalysis() # Remove the previous analysis
@@ -695,9 +745,9 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         self.ui.graphicsView_time.addItem(self.ui.graphicsView_time.baseline)
         self.ui.graphicsView_time.addItem(self.ui.graphicsView_time.threshold)
 
-        self.ui.graphicsView_time.eventBeginMarker = self.ui.graphicsView_time.plot(self.edgeBegin.astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate, self.analyzeDataWorkerInstance.rawData[self.edgeBegin], pen=None, symbol='o', symbolBrush='g', symbolSize=7, autoDownsample=False, downsample=1)
+        self.ui.graphicsView_time.eventBeginMarker = self.ui.graphicsView_time.plot(self.edgeBegin.astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect], self.analyzeDataWorkerInstance.rawData[self.columnSelect][self.edgeBegin], pen=None, symbol='o', symbolBrush='g', symbolSize=7, autoDownsample=False, downsample=1)
         self.ui.graphicsView_time.eventBeginMarker.setClipToView(False) # Disable clipToView so that points don't disappear when zooming and panning
-        self.ui.graphicsView_time.eventEndMarker = self.ui.graphicsView_time.plot(self.edgeEnd.astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate, self.analyzeDataWorkerInstance.rawData[self.edgeEnd], pen=None, symbol='o', symbolBrush='r', symbolSize=7, autoDownsample=False, downsample=1)
+        self.ui.graphicsView_time.eventEndMarker = self.ui.graphicsView_time.plot(self.edgeEnd.astype(numpy.float)/self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect], self.analyzeDataWorkerInstance.rawData[self.columnSelect][self.edgeEnd], pen=None, symbol='o', symbolBrush='r', symbolSize=7, autoDownsample=False, downsample=1)
         self.ui.graphicsView_time.eventEndMarker.setClipToView(False) # Disable clipToView so that points don't disappear when zooming and panning
 
         # self.ui.graphicsView_histogram_plot.clear()
@@ -712,8 +762,25 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         # self.tempPlot.sigPointsClicked.connect(self.tempPlot_sigPointsClicked)
 
         self.ui.lineEdit_totalEvents.setText(str(self.numberOfEvents))
-        #print self.numberOfEvents
         self.graphicsView_eventViewer_eventChanged(absolute=1)
+
+        # dwellTimeSum = numpy.sum(self.dwellTime)
+        # rawDataLen = len(self.analyzeDataWorkerInstance.rawData[self.columnSelect])
+        # effectiveSamplingRate = self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect]
+        self.ui.label_ProbOpen.setText(str(round((numpy.sum(self.dwellTime) / len(
+            self.analyzeDataWorkerInstance.rawData[self.columnSelect]) * self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect]), 4)))
+
+        if (0 != self.analyzeDataWorkerInstance.numberOfEvents):
+            self.ui.tabWidget_plot.setTabEnabled(3, True)
+            self.ui.lineEdit_currentEvent.setEnabled(True)
+            self.ui.lineEdit_totalEvents.setEnabled(True)
+            self.ui.lineEdit_totalEvents.setReadOnly(True) #Need to set readOnly again after enabling the widget to disable interaction
+            self.ui.pushButton_previousEvent.setEnabled(False)
+            if (1 == self.analyzeDataWorkerInstance.numberOfEvents):
+                self.ui.pushButton_nextEvent.setEnabled(False)
+            else:
+                self.ui.pushButton_nextEvent.setEnabled(True)
+            self.ui.action_exportAllEventsAsCSV.setEnabled(True)
 
     # def tempPlot_sigPointsClicked(self, item, points):
         # self.analyzeDataWorkerInstance.popt = numpy.delete(self.analyzeDataWorkerInstance.popt, points[0].pos()[0])
@@ -743,6 +810,14 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         elif absolute != 0:
             self.currentEvent = numpy.clip(absolute, 1, self.numberOfEvents)
         self.ui.lineEdit_currentEvent.setText(str(self.currentEvent))
+        if (1 == self.currentEvent):
+            self.ui.pushButton_previousEvent.setEnabled(False)
+        else:
+            self.ui.pushButton_previousEvent.setEnabled(True)
+        if (self.currentEvent == self.numberOfEvents):
+            self.ui.pushButton_nextEvent.setEnabled(False)
+        else:
+            self.ui.pushButton_nextEvent.setEnabled(True)
         # Update event viewer tab
         if (3 == self.ui.tabWidget_plot.currentIndex()):
             self.displayData([self.columnSelect])
@@ -795,8 +870,8 @@ class LoadOldDataWindow(QtGui.QMainWindow):
         currentCSVFileName += '_' + threshold + '.csv'
         with open(self.currentDirectoryName + currentCSVFileName, 'w') as f:
             for i in range(numpy.shape(self.eventIndex)[0]):
-                f.write('# Event started at %f s\n' %((self.eventIndex[i][0] - 100.)/self.analyzeDataWorkerInstance.effectiveSamplingRate))
+                f.write('# Event started at %f s\n' %((self.eventIndex[i][0] - 100.)/self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect]))
                 for j in numpy.arange(self.eventIndex[i][0]-100, self.eventIndex[i][-1]+101):
-                    # t = (j - self.eventIndex[i][0] + 100.)/self.analyzeDataWorkerInstance.effectiveSamplingRate
-                    t = j*1./self.analyzeDataWorkerInstance.effectiveSamplingRate
-                    f.write(str(t) + ',' + str(self.analyzeDataWorkerInstance.rawData[j]) + '\n')
+                    # t = (j - self.eventIndex[i][0] + 100.)/self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect]
+                    t = j*1./self.analyzeDataWorkerInstance.effectiveSamplingRate[self.columnSelect]
+                    f.write(str(t) + ',' + str(self.analyzeDataWorkerInstance.rawData[self.columnSelect][j]) + '\n')

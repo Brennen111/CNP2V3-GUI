@@ -184,8 +184,6 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.action_enableLogging.triggered.connect(self.action_enableLogging_triggered)
         self.ui.lineEdit_livePreviewFilterBandwidth.editingFinished.connect(self.lineEdit_livePreviewFilterBandwidth_editingFinished)
 
-        self.ui.lineEdit_filePrefix.editingFinished.connect(self.lineEdit_filePrefix_editingFinished)
-
         # self.ui.label_poreResistance.mouseReleaseEvent = self.label_poreResistance_clicked()
 
         self.ui.pushButton_MasterBiasElectrodeControlReset.clicked.connect(self.pushButton_master_bias_electrode_control_reset_clicked)
@@ -1024,7 +1022,7 @@ class MainWindow(QtGui.QMainWindow):
 
     def action_enableLogging_triggered(self):
         if (self.ui.action_enableLogging.isChecked()):
-            newFilePrefix = str(int(float(self.ui.lineEdit_counterelectrodePotential.text()))) + "mV_" + datetime.date.today().strftime("%Y%m%d") + "_" + time.strftime("%H%M%S")
+            newFilePrefix = str(self.ui.lineEdit_filePrefix.text()) + "_" + str(int(float(self.ui.lineEdit_counterelectrodePotential.text()))) + "mV_" + datetime.date.today().strftime("%Y%m%d") + "_" + time.strftime("%H%M%S")
             self.writeToMasterLogFileWorkerInstance.setFileName(newFilePrefix)
             self.writeToSlaveLogFileWorkerInstance.setFileName(newFilePrefix)
             self.writeToMasterLogFileWorkerInstance.logging = True
@@ -1616,7 +1614,3 @@ class MainWindow(QtGui.QMainWindow):
             self.adcList[column].idcOffset += self.adcList[column].idcRelative
             #self.ui.label_rowPlotIDCOffsetArray[column].setText(str(self.adcList[column].idcOffset * 1e9))
         self.updateIDCLabels()
-
-    def lineEdit_filePrefix_editingFinished(self):
-        self.writeToMasterLogFileWorkerInstance.setFileName(str(self.ui.lineEdit_livePreviewFilterBandwidth.text()))
-        self.writeToSlaveLogFileWorkerInstance.setFileName(str(self.ui.lineEdit_livePreviewFilterBandwidth.text()))

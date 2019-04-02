@@ -290,9 +290,11 @@ class ProcessRawDataWorker(QtCore.QObject):
                 # print totalNoise/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb, numpy.sum(numpy.bitwise_and(numpy.bitwise_and(tags[:-3], tags[1:-2]), numpy.bitwise_and(tags[2:-1], tags[3:])))
 
                 ADCData[column] = ADCData[column][self.skipPoints:]
-                if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')): #TODO
-                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[column][::self.skipPoints/4]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
-                    self.parentWindow.analyzeDataWorkerInstance.effectiveSamplingRate = globalConstants.ADCSAMPLINGRATE/self.skipPoints*4
+                if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
+                    #self.parentWindow.analyzeDataWorkerInstance.rawData[column] = ADCData[column][::self.skipPoints/4]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+                    self.parentWindow.analyzeDataWorkerInstance.rawData[column] = ADCData[column]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+                    #self.parentWindow.analyzeDataWorkerInstance.effectiveSamplingRate[column] = globalConstants.ADCSAMPLINGRATE/self.skipPoints*4
+                    self.parentWindow.analyzeDataWorkerInstance.effectiveSamplingRate[column] = globalConstants.ADCSAMPLINGRATE
             else:
                 #ADCData[:-1] += numpy.diff(ADCData)/(2*numpy.pi*2.5e6/globalConstants.ADCSAMPLINGRATE)
                 # if (self.parentWindow.ui.checkBox_enableWaveletDenoising.isChecked()):
@@ -317,12 +319,10 @@ class ProcessRawDataWorker(QtCore.QObject):
                 #         self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[:]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[self.validColumn].idcOffset
 
                 if (hasattr(self.parentWindow, 'analyzeDataWorkerInstance')):
-                    self.parentWindow.analyzeDataWorkerInstance.rawData = ADCData[column][:]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
+                    self.parentWindow.analyzeDataWorkerInstance.rawData[column] = ADCData[column][:]/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
 
             self.parentWindow.adcList[column].idcRelative = numpy.mean(ADCData[column])*1.0/self.parentWindow.adcList[column].amplifierList[self.parentWindow.rowSelect].rdcfb/globalConstants.AAFILTERGAIN - self.parentWindow.adcList[column].idcOffset
             self.progress.emit(1, 'Finished calculating data to display')
-
-            # self.parentWindow.adcList[column].adcData = ADCData[column] # I never use this
 
             if (hasattr(self.parentWindow.ui, 'action_enableLivePreview') and self.parentWindow.ui.action_enableLivePreview.isChecked() == False):
                 pass
@@ -460,28 +460,30 @@ class AnalyzeDataWorker(QtCore.QObject):
     def __init__(self, parentWindow):
         super(AnalyzeDataWorker, self).__init__()
         self.parentWindow = parentWindow
-        self.rawData = 0
+        self.rawData = [None] * 5
+        self.effectiveSamplingRate = [None] * 5
 
     def analyzeData(self, detectEdges=True):
         """This method determines the baseline and threshold values to be used for event detection"""
         # self.generateBaselineStartIndex = 222000e-6*self.effectiveSamplingRate
         # self.generateBaselineStopIndex = 232000e-6*self.effectiveSamplingRate
         if self.parentWindow.ui.checkBox_enableLivePreviewFilter.isChecked() is False:
-            self.effectiveSamplingRate = globalConstants.ADCSAMPLINGRATE
-        self.generateBaselineStartIndex = int(238900e-6*self.effectiveSamplingRate)
-        self.generateBaselineStopIndex = int(239500e-6*self.effectiveSamplingRate)
+            self.effectiveSamplingRate[self.parentWindow.columnSelect] = globalConstants.ADCSAMPLINGRATE
+        ####self.generateBaselineStartIndex = int(238900e-6*self.effectiveSamplingRate) # TODO why subsample baseline?
+        ####self.generateBaselineStopIndex = int(239500e-6*self.effectiveSamplingRate)
         #print self.generateBaselineStartIndex, self.generateBaselineStopIndex
         if (None != self.parentWindow.baseline):
             self.baseline = self.parentWindow.baseline
         else:
-            self.baseline = numpy.mean(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
+            ####self.baseline = numpy.mean(self.rawData[self.parentWindow.columnSelect][self.generateBaselineStartIndex:self.generateBaselineStopIndex])
+            self.baseline = numpy.mean(self.rawData[self.parentWindow.columnSelect])
             self.parentWindow.baseline = self.baseline
-        f, Pxx = scipy.signal.welch(self.rawData, globalConstants.ADCSAMPLINGRATE, nperseg=2**13)
+        f, Pxx = scipy.signal.welch(self.rawData[self.parentWindow.columnSelect], globalConstants.ADCSAMPLINGRATE, nperseg=2**13)
         Pxx = Pxx[f > 100]
         f = f[f > 100]
         self.parentWindow.analyzeF, self.parentWindow.analyzePxx = f, Pxx
-        self.sigma = numpy.std(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
-        #print self.sigma
+        ####self.sigma = numpy.std(self.rawData[self.parentWindow.columnSelect][self.generateBaselineStartIndex:self.generateBaselineStopIndex])
+        self.sigma = numpy.std(self.rawData[self.parentWindow.columnSelect])
         self.parentWindow.sigma = self.sigma
         if (None != self.parentWindow.threshold):
             self.threshold = self.parentWindow.threshold
@@ -491,60 +493,62 @@ class AnalyzeDataWorker(QtCore.QObject):
                 self.threshold = self.baseline - self.numberOfSigmas * self.sigma
             else:
                 self.threshold = self.baseline - 5*self.sigma
-            #print numpy.std(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
             self.parentWindow.threshold = self.threshold
-        #print self.threshold
+
         try:
             self.minimumEventDuration = eval(str(self.parentWindow.ui.lineEdit_minimumEventDuration.text()))*1e-6
-            self.minimumEventSamples = numpy.maximum(self.effectiveSamplingRate*self.minimumEventDuration, 1)
+            self.minimumEventSamples = numpy.maximum(self.effectiveSamplingRate[self.parentWindow.columnSelect]*self.minimumEventDuration, 1)
         except:
             self.minimumEventDuration = 1e-6
-            self.minimumEventSamples = numpy.maximum(self.effectiveSamplingRate*self.minimumEventDuration, 1)
+            self.minimumEventSamples = numpy.maximum(self.effectiveSamplingRate[self.parentWindow.columnSelect]*self.minimumEventDuration, 1)
+
         try:
             self.maximumEventDuration = eval(str(self.parentWindow.ui.lineEdit_maximumEventDuration.text()))*1e-6
-            self.maximumEventSamples = self.effectiveSamplingRate*self.maximumEventDuration
+            self.maximumEventSamples = self.effectiveSamplingRate[self.parentWindow.columnSelect]*self.maximumEventDuration
         except:
             self.maximumEventDuration = 1e-3
-            self.maximumEventSamples = self.effectiveSamplingRate*self.maximumEventDuration
+            self.maximumEventSamples = self.effectiveSamplingRate[self.parentWindow.columnSelect]*self.maximumEventDuration
+
         if (detectEdges == True):
             self.detectEdges()
 
     def detectEdges(self):
         """This method determines event edges based on a fixed thresholding scheme"""
-        self.eventIndex = (numpy.where(self.rawData < self.threshold)[0]).astype(numpy.int32)
+        self.eventIndex = (numpy.where(self.rawData[self.parentWindow.columnSelect] < self.threshold)[0]).astype(numpy.int32)
         if (0 == self.eventIndex.size):
-            print "No events found"
+            print "No events found below threshold"
             self.quit.emit()
             return
         self.transitions = numpy.diff(self.eventIndex)
-        self.edgeBeginIndex = numpy.insert(self.transitions, 0, 2)
-        self.edgeEndIndex = numpy.insert(self.transitions, -1, 2)
-        self.edgeBegin = self.eventIndex[numpy.where(self.edgeBeginIndex > 1)]
-        self.edgeEnd = self.eventIndex[numpy.where(self.edgeEndIndex > 1)]
+        # self.edgeBeginIndex = numpy.insert(self.transitions, 0, 2) # TODO I don't know what this does. Indicates start?
+        # self.edgeEndIndex = numpy.insert(self.transitions, -1, 2) # TODO I don't know what this does. Indicates end?
+        self.edgeBegin = self.eventIndex[numpy.where(self.transitions > 1)] # >1 means single index per event
+        self.edgeEnd = self.eventIndex[numpy.where(self.transitions > 1)]
 
         self.numberOfEvents = len(self.edgeBegin)
-        self.limit = self.baseline - 3*numpy.std(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex]) #Set the upper limit to 1 sigma away from the mean
+        ####self.limit = self.baseline - 3*numpy.std(self.rawData[self.parentWindow.columnSelect][self.generateBaselineStartIndex:self.generateBaselineStopIndex]) #Set the upper limit to 1 sigma away from the mean
+        self.limit = self.baseline - 3*self.sigma
         # self.limit = self.threshold + 4*self.sigma #This should put the upper limit at 1 sigma closer to baseline than the threshold
         for i in range(self.numberOfEvents):
             eb = self.edgeBegin[i]
-            while self.rawData[eb] < self.limit and eb > 0:
+            while self.rawData[self.parentWindow.columnSelect][eb] < self.limit and eb > 0: # Move back samples until we are above limit. TODO check limit
                 eb -= 1
             self.edgeBegin[i] = eb
 
             ee = self.edgeEnd[i]
-            while self.rawData[ee] < self.limit:
+            while self.rawData[self.parentWindow.columnSelect][ee] < self.limit: # Move forward samples until we are above limit. TODO check limit
                 ee += 1
-                if i == self.numberOfEvents - 1:
-                    if ee == len(self.rawData) - 1:
-                        self.edgeEnd[i] = 0
-                        self.edgeBegin[i] = 0
-                        ee = 0
-                        break
-                elif ee > self.edgeBegin[i + 1]:
-                    self.edgeBegin[i+1] = 0
+                if ee == len(self.rawData[self.parentWindow.columnSelect]) - 1: # If we hit the end of data this event is invalid
                     self.edgeEnd[i] = 0
+                    self.edgeBegin[i] = 0
                     ee = 0
                     break
+                elif (i < self.numberOfEvents-1): # If we are not at the last event
+                    if ((ee >= self.edgeBegin[i + 1])): # If we hit next edgeBegin before falling below limit. No event.
+                        self.edgeEnd[i] = 0
+                        self.edgeBegin[i+1] = 0
+                        ee = 0
+                        break
             self.edgeEnd[i] = ee
 
         self.edgeBegin = self.edgeBegin[self.edgeBegin != 0]
@@ -555,32 +559,12 @@ class AnalyzeDataWorker(QtCore.QObject):
         elif (len(self.edgeEnd) > len(self.edgeBegin)):
             self.edgeEnd = self.edgeEnd[1:]
         self.numberOfEvents = len(self.edgeBegin)
+        if (0 == self.numberOfEvents):
+            print "Events below threshold found but cutoff by sample start/finish"
+            self.quit.emit()
+            return
 
-        # Remove events shorter than duration specified in the GUI
-        for i in range(self.numberOfEvents):
-            if ((self.edgeEnd[i] - self.edgeBegin[i]) < self.minimumEventSamples):
-                self.edgeBegin[i] = 0
-                self.edgeEnd[i] = 0
-        self.edgeBegin = self.edgeBegin[self.edgeBegin != 0]
-        self.edgeEnd = self.edgeEnd[self.edgeEnd != 0]
-        self.numberOfEvents = len(self.edgeBegin)
-
-        for i in range(self.numberOfEvents-1, 0, -1):
-            #Remove events that are too close to each other
-            if (self.edgeBegin[i] - self.edgeEnd[i-1] < 5e-6*self.effectiveSamplingRate):
-                self.edgeBegin[i] = 0
-                self.edgeEnd[i-1] = 0
-            # elif (self.edgeBegin[i] - self.edgeEnd[i-1] < self.maximumEventSamples):
-            else:
-                if (not numpy.any(self.rawData[self.edgeEnd[i-1]:self.edgeBegin[i]] > self.baseline - 0.5*self.sigma)):
-                    self.edgeBegin[i] = 0
-                    self.edgeEnd[i-1] = 0
-        self.edgeBegin = self.edgeBegin[self.edgeBegin != 0]
-        self.edgeEnd = self.edgeEnd[self.edgeEnd != 0]
-        self.numberOfEvents = len(self.edgeBegin)
-        #print self.baseline
-
-        # Remove events shorter than duration specified in the GUI
+        # Remove events outside GUI range
         for i in range(self.numberOfEvents):
             if ((self.edgeEnd[i] - self.edgeBegin[i]) < self.minimumEventSamples) or ((self.edgeEnd[i] - self.edgeBegin[i]) > self.maximumEventSamples):
                 self.edgeBegin[i] = 0
@@ -588,9 +572,33 @@ class AnalyzeDataWorker(QtCore.QObject):
         self.edgeBegin = self.edgeBegin[self.edgeBegin != 0]
         self.edgeEnd = self.edgeEnd[self.edgeEnd != 0]
         self.numberOfEvents = len(self.edgeBegin)
+        if (0 == self.numberOfEvents):
+            print "Events found but none are within GUI range"
+            self.quit.emit()
+            return
+
+        for i in range(self.numberOfEvents-1, 0, -1):
+            #Remove events that are too close to each other
+            if (self.edgeBegin[i] - self.edgeEnd[i-1] < 5e-6*self.effectiveSamplingRate[self.parentWindow.columnSelect]): # TODO Why 5e-6
+                self.edgeBegin[i] = 0
+                self.edgeEnd[i-1] = 0
+            # elif (self.edgeBegin[i] - self.edgeEnd[i-1] < self.maximumEventSamples):
+            else:
+                if (not numpy.any(self.rawData[self.parentWindow.columnSelect][self.edgeEnd[i-1]:self.edgeBegin[i]] > self.baseline - 0.5*self.sigma)):
+                    self.edgeBegin[i] = 0 # This is supposed to delete inter-event windows that do not raise above 0.5 sigma below baseline
+                    self.edgeEnd[i-1] = 0
+        self.edgeBegin = self.edgeBegin[self.edgeBegin != 0]
+        self.edgeEnd = self.edgeEnd[self.edgeEnd != 0]
+        self.numberOfEvents = len(self.edgeBegin)
+        if (0 == self.numberOfEvents):
+            print "Events found in GUI range but are too close together"
+            self.quit.emit()
+            return
+
+
 
         self.eventIndex = numpy.empty_like(self.edgeBegin, dtype='object') #Overwrites previous self.eventIndex
-        self.eventIndex2 = numpy.empty_like(self.edgeBegin, dtype='object') #Overwrites previous self.eventIndex
+        #self.eventIndex2 = numpy.empty_like(self.edgeBegin, dtype='object') #Overwrites previous self.eventIndex
         self.eventValue = numpy.empty_like(self.edgeBegin, dtype='object')
         self.deltaI = numpy.empty_like(self.edgeBegin, dtype='object')
         self.meanDeltaI = numpy.empty_like(self.edgeBegin, dtype=numpy.float32)
@@ -600,24 +608,23 @@ class AnalyzeDataWorker(QtCore.QObject):
 
         for i in range(self.numberOfEvents):
             # self.eventIndex2[i] = numpy.arange(self.edgeBegin[i], self.edgeEnd[i]+1)
-            self.eventIndex[i] = numpy.arange(self.edgeBegin[i]-100, self.edgeEnd[i]+101)
-            self.eventValue[i] = self.rawData[self.eventIndex[i][100:-100]]
-            self.deltaI[i] = self.baseline - self.rawData[self.eventIndex[i][100:-100]]
+            self.eventIndex[i] = numpy.arange(self.edgeBegin[i]-100, self.edgeEnd[i]+101) # include -100 and +100 around edges
+            #self.eventValue[i] = self.rawData[self.parentWindow.columnSelect][self.eventIndex[i][100:-100]]
+            self.deltaI[i] = self.baseline - self.rawData[self.parentWindow.columnSelect][self.eventIndex[i][100:-100]]
             self.meanDeltaI[i] = numpy.mean(self.deltaI[i], dtype=numpy.float32)
-            self.dwellTime[i] = (self.edgeEnd[i] - self.edgeBegin[i]).astype(numpy.float32)/self.effectiveSamplingRate
+            self.dwellTime[i] = (self.edgeEnd[i] - self.edgeBegin[i]).astype(numpy.float32)/self.effectiveSamplingRate[self.parentWindow.columnSelect]
             # popt, pconv = scipy.optimize.curve_fit(self.exponentialFunction, self.eventIndex[i][:500] - self.eventIndex[i][0], self.eventValue[i][:500])
             # self.meanEventValue[i] = self.exponentialFunction(self.eventIndex[i][:500] - self.eventIndex[i][0], *popt)
             # self.popt = numpy.append(self.popt, popt[1]/40e6)
 
-        # print self.edgeBegin, self.edgeEnd, self.eventIndex
         self.parentWindow.edgeBegin = self.edgeBegin
         self.parentWindow.edgeEnd = self.edgeEnd
         self.parentWindow.numberOfEvents = self.numberOfEvents
         self.parentWindow.eventIndex = self.eventIndex
-        self.parentWindow.eventValue = self.eventValue
+        #self.parentWindow.eventValue = self.eventValue
         self.parentWindow.deltaI = self.deltaI
         self.parentWindow.meanDeltaI = self.meanDeltaI
-        self.parentWindow.dwellTime = numpy.reshape(self.dwellTime, (len(self.dwellTime), 1))
+        self.parentWindow.dwellTime = numpy.reshape(self.dwellTime, (len(self.dwellTime), 1)) # This does nothing now?
         # self.parentWindow.PSDWorkerInstance.needsScaling = True
         # self.parentWindow.PSDWorkerInstance.ADCData = self.rawData2[self.rawData >= self.baseline - self.sigma*5]*self.parentWindow.adcList[self.parentWindow.columnSelect].amplifierList[self.parentWindow.rowSelect].rdcfb*globalConstants.AAFILTERGAIN
         # self.parentWindow.PSDThread.start()
@@ -638,10 +645,11 @@ class AnalyzeDataWorker(QtCore.QObject):
         i = 0
         j = 0
         eventNumber = 0
-        dataPoint = self.rawData[i]
-        nData = len(self.rawData)
+        dataPoint = self.rawData[self.parentWindow.columnSelect][i]
+        nData = len(self.rawData[self.parentWindow.columnSelect])
         baseline = dataPoint
-        variance = numpy.var(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
+        ####variance = numpy.var(self.rawData[self.parentWindow.columnSelect][self.generateBaselineStartIndex:self.generateBaselineStopIndex])
+        variance = numpy.var(self.rawData[self.parentWindow.columnSelect])
         variance_baseline = baseline
         isEvent = False
         localEventIndex = numpy.hstack(self.eventIndex)
@@ -658,7 +666,7 @@ class AnalyzeDataWorker(QtCore.QObject):
         # while j < (len(localEventIndex)):
         while j in range(numpy.shape(self.eventIndex)[0]):
             i = self.eventIndex[j][0]
-            dataPoint = self.rawData[i]
+            dataPoint = self.rawData[self.parentWindow.columnSelect][i]
 
             # if True:
             # done = False
@@ -684,7 +692,7 @@ class AnalyzeDataWorker(QtCore.QObject):
 
             while event_i in self.eventIndex[j][:-1]:
                 event_i += 1
-                dataPoint = self.rawData[event_i]
+                dataPoint = self.rawData[self.parentWindow.columnSelect][event_i]
 
                 # if dataPoint >= baseline - threshold_end:
                     # done = True
@@ -732,7 +740,7 @@ class AnalyzeDataWorker(QtCore.QObject):
                     ko = event_i = minIndex + 1
                     minIndexP = minIndexN = event_i
                     previousLevelStart = event_i
-                    meanEstimate = self.rawData[event_i]
+                    meanEstimate = self.rawData[self.parentWindow.columnSelect][event_i]
                     levelSum = levelSumMinP = levelSumMinN = meanEstimate
 
                 # event_i += 1
@@ -747,9 +755,9 @@ class AnalyzeDataWorker(QtCore.QObject):
             if self.edgeEnd[eventNumber] - self.edgeBegin[eventNumber] > self.minimumEventSamples:
                 if self.edgeEnd[eventNumber] - self.edgeBegin[eventNumber] < 0: # Limit fastest events to 80 samples long => 2 us at 40 MSPS
                     nLevels = 0
-                    # self.meanEventValue[eventNumber][nLevels] = numpy.min(self.rawData[self.edgeBegin[eventNumber]:self.edgeEnd[eventNumber]+1])
+                    # self.meanEventValue[eventNumber][nLevels] = numpy.min(self.rawData[self.parentWindow.columnSelect][self.edgeBegin[eventNumber]:self.edgeEnd[eventNumber]+1])
                     self.dwellTime[eventNumber][nLevels] = self.edgeEnd[eventNumber]-self.edgeBegin[eventNumber]
-                    self.meanEventValue[eventNumber] = [numpy.min(self.rawData[self.edgeBegin[eventNumber]:self.edgeEnd[eventNumber]+1]) for k in range(self.dwellTime[eventNumber][nLevels])]
+                    self.meanEventValue[eventNumber] = [numpy.min(self.rawData[self.parentWindow.columnSelect][self.edgeBegin[eventNumber]:self.edgeEnd[eventNumber]+1]) for k in range(self.dwellTime[eventNumber][nLevels])]
 
             # self.eventValue2.append(numpy.hstack(self.meanEve.astype(int)])
             # self.eventValue2[eventNumber] = self.eventValue2[eventNumber][self.eventValue2[eventNumber] != None]
@@ -796,7 +804,7 @@ class AnalyzeDataWorker(QtCore.QObject):
         self.parentWindow.meanEventValue = numpy.asarray(self.meanEventValue, dtype='object')
         # self.parentWindow.eventValue2 = numpy.asarray(self.eventValue2, dtype='object')
         # self.parentWindow.dwellTime = self.dwellTime[:eventNumber]/globalConstants.ADCSAMPLINGRATE
-        self.parentWindow.dwellTime = self.dwellTime[:eventNumber]/self.effectiveSamplingRate
+        self.parentWindow.dwellTime = self.dwellTime[:eventNumber]/self.effectiveSamplingRate[self.parentWindow.columnSelect]
         self.parentWindow.eventFitColor = self.eventFitColor
 
         self.finished.emit()
@@ -810,10 +818,11 @@ class AnalyzeDataWorker(QtCore.QObject):
         i = 0
         j = 0
         eventNumber = 0
-        dataPoint = self.rawData[i]
-        nData = len(self.rawData)
+        dataPoint = self.rawData[self.parentWindow.columnSelect][i]
+        nData = len(self.rawData[self.parentWindow.columnSelect])
         baseline = dataPoint
-        variance = numpy.var(self.rawData[self.generateBaselineStartIndex:self.generateBaselineStopIndex])
+        ####variance = numpy.var(self.rawData[self.parentWindow.columnSelect][self.generateBaselineStartIndex:self.generateBaselineStopIndex])
+        variance = numpy.var(self.rawData[self.parentWindow.columnSelect])
         variance_baseline = baseline
         isEvent = False
         localEventIndex = numpy.hstack(self.eventIndex)
@@ -833,7 +842,7 @@ class AnalyzeDataWorker(QtCore.QObject):
         while j in range(numpy.shape(self.eventIndex)[0]):
             i = self.eventIndex[j][0]
             while i in self.eventIndex[j]:
-                dataPoint = self.rawData[i]
+                dataPoint = self.rawData[self.parentWindow.columnSelect][i]
                 threshold_start = 5 * numpy.sqrt(variance)
 
                 if numpy.abs(dataPoint - baseline) > threshold_start:
@@ -864,7 +873,7 @@ class AnalyzeDataWorker(QtCore.QObject):
 
                     while not done and event_i in self.eventIndex[j][:-1]:
                         event_i += 1
-                        dataPoint = self.rawData[event_i]
+                        dataPoint = self.rawData[self.parentWindow.columnSelect][event_i]
 
                         if j == 0:
                             print i, event_i, self.eventIndex[j][100], self.eventIndex[j][-101]
@@ -916,7 +925,7 @@ class AnalyzeDataWorker(QtCore.QObject):
                             ko = event_i = minIndex + 1
                             minIndexP = minIndexN = event_i
                             previousLevelStart = event_i
-                            meanEstimate = self.rawData[event_i]
+                            meanEstimate = self.rawData[self.parentWindow.columnSelect][event_i]
                             levelSum = levelSumMinP = levelSumMinN = meanEstimate
 
                         # event_i += 1
@@ -982,7 +991,7 @@ class AnalyzeDataWorker(QtCore.QObject):
         self.parentWindow.meanEventValue = numpy.asarray(self.meanEventValue, dtype='object')
         # self.parentWindow.eventValue2 = numpy.asarray(self.eventValue2, dtype='object')
         # self.parentWindow.dwellTime = self.dwellTime[:eventNumber]/globalConstants.ADCSAMPLINGRATE
-        self.parentWindow.dwellTime = self.dwellTime[:eventNumber]/self.effectiveSamplingRate
+        self.parentWindow.dwellTime = self.dwellTime[:eventNumber]/self.effectiveSamplingRate[self.parentWindow.columnSelect]
         self.parentWindow.eventFitColor = self.eventFitColor
 
         self.finished.emit()
